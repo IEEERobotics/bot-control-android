@@ -1,4 +1,5 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res/edu.ncsu.ieee.botcontrol"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -9,8 +10,26 @@
     tools:context=".MainActivity" >
 
     <TextView
+        android:id="@+id/descriptionText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true"
         android:text="@string/main_content" />
 
+    <edu.ncsu.ieee.botcontrol.TouchJoystick
+        android:id="@+id/driveJoystick"
+        android:layout_width="250dp"
+        android:layout_height="250dp"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentLeft="true"
+        android:paddingTop="12dp"
+        android:paddingLeft="12dp"
+        android:paddingBottom="12dp"
+        android:paddingRight="12dp"
+        app:backgroundDrawable="@drawable/ring"
+        app:messageText="Drive"
+        app:messageColor="@android:color/secondary_text_dark"
+        app:messageFontSize="16sp" />
+    
 </RelativeLayout>

@@ -1,0 +1,10 @@
+<resources>
+
+    <declare-styleable name="TouchJoystick">
+        <attr name="backgroundDrawable" format="color|reference" /><attr name="messageText" format="string" />
+        <attr name="messageColor" format="color" /><attr name="messageFontSize" format="dimension" />
+        
+        
+    </declare-styleable>
+
+</resources>
