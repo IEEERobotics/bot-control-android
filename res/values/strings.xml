@@ -4,5 +4,6 @@
     <string name="app_name">Bot Control</string>
     <string name="action_settings">Settings</string>
     <string name="main_content">Main control area</string>
+    <string name="action_zmqtest">ZMQ Test</string>
 
 </resources>

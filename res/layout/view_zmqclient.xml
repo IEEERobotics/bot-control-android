@@ -1,0 +1,105 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical" >
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" >
+
+        <ImageButton
+            android:id="@+id/btnLoadHostComputer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="Load host computer&apos;s IP address (10.0.2.2) for emulator"
+            android:padding="5dp"
+            android:src="@android:drawable/ic_menu_set_as" />
+
+        <TextView
+            android:id="@+id/txtServerProtocol"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="tcp"
+            android:textAppearance="?android:attr/textAppearanceMedium" />
+
+        <TextView
+            android:id="@+id/txtProtocolSeparator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="Protocol separator"
+            android:text="://"
+            android:textAppearance="?android:attr/textAppearanceMedium" />
+
+        <EditText
+            android:id="@+id/txtServerHost"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:contentDescription="Address client connects to"
+            android:hint="Server host address"
+            android:inputType="textUri"
+            android:text="127.0.0.1" >
+
+        </EditText>
+
+        <TextView
+            android:id="@+id/txtPortSeparator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="Port separator"
+            android:text=":"
+            android:textAppearance="?android:attr/textAppearanceMedium" />
+
+        <TextView
+            android:id="@+id/txtServerPort"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="61000"
+            android:textAppearance="?android:attr/textAppearanceMedium" />
+
+        <Button
+            android:id="@+id/btnStartClient"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start Client" />
+
+        <Button
+            android:id="@+id/btnStopClient"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Stop Client" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" >
+
+        <EditText
+            android:id="@+id/txtMessage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ems="10"
+            android:hint="Message"
+            android:inputType="text" />
+
+        <Button
+            android:id="@+id/btnSend"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Send" />
+
+    </LinearLayout>
+
+    <EditText
+        android:id="@+id/txtClientConsole"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="Client output"
+        android:ems="10"
+        android:gravity="center_vertical|top"
+        android:inputType="textMultiLine" />
+
+</LinearLayout>
