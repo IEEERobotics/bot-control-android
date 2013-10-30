@@ -40,12 +40,12 @@ public class TouchJoystick extends View {
 	
 	private float forward = 0.f;
 	private float strafe = 0.f;
-	//private float turn = 0.f;
-	// TODO Turning not implemented yet
+	private float turn = 0.f;
+	// TODO Turning not implemented yet; turn is always 0
 
 	private float lastForward = 0.f;
 	private float lastStrafe = 0.f;
-	//private float lastTurn = 0.f;
+	private float lastTurn = 0.f;
 
 	// Display parameters
 	private float knobSize = 25.f; ///< Radius of circle drawn to denote knob position
@@ -53,7 +53,9 @@ public class TouchJoystick extends View {
 	private TextPaint messagePaint;
 	private float messageTextWidth;
 	private float messageTextHeight;
-	
+
+	private ZMQClientThread clientThread = null;
+
 	public TouchJoystick(Context context) {
 		super(context);
 		init(null, 0);
@@ -91,7 +93,7 @@ public class TouchJoystick extends View {
 		
 		lastForward = forward = 0.f;
 		lastStrafe = strafe = 0.f;
-		//lastTurn = turn = 0.f;
+		lastTurn = turn = 0.f;
 		
 		// Initialize display parameters
 		knobPaint = new Paint();
@@ -219,25 +221,45 @@ public class TouchJoystick extends View {
 			forward = -100.f * (float) (knobY / maxKnobR); // NOTE Y-flip
 			strafe = 100.f * (float) (knobX / maxKnobR);
 		}
-		//Log.d(TAG, "updateKnob(): forward = " + forward + ", strafe = " + strafe);
+		//Log.d(TAG, "updateKnob(): forward = " + forward + ", strafe = " + strafe + ", turn = " + turn);
 	}
 
 	private void doStop() {
-		sendCommand(null); // TODO Generate and send stop command (if not already stopped?)
+		// Generate and send stop command (TODO if not already stopped?)
+		sendCommand(
+				"{cmd: fwd_strafe_turn, " +
+				"opts: {fwd: 0, strafe: 0, turn: 0}}");
 	}
 
 	private void doMove() {
-		sendCommand(null); // TODO Generate and send movement command (if different from last command?)
+		// Generate and send movement command (TODO if different from last command?)
+		sendCommand(String.format(
+				"{cmd: fwd_strafe_turn, " +
+				"opts: {fwd: %f, strafe: %f, turn: %f}}",
+				forward,
+				strafe,
+				turn));
 	}
 
-	private void sendCommand(Object cmdObj) {
-		if (lastForward != forward || lastStrafe != strafe) {
-			// TODO add turn when implemented
-			Log.d(TAG, "sendCommand(): forward = " + forward + ", strafe = " + strafe);
-			// TODO Send this command to the control server, creating JSON object from cmdObj;
+	private void sendCommand(final String cmdStr) {
+		if (lastForward != forward || lastStrafe != strafe || lastTurn != turn) {
+			//Log.d(TAG, "sendCommand(): forward = " + forward + ", strafe = " + strafe + ", turn = " + turn);
+			//Log.d(TAG, "sendCommand(): cmdStr = " + cmdStr);
+			// TODO Send this command (JSON string) to the control server,
 			//   wait for ACK, deal with concurrency issues
+			if (clientThread != null && clientThread.isAlive()) {
+				// Start a new thread to avoid blocking the main (UI) thread
+				(new Thread() {
+					public void run() {
+						Log.d(TAG, "Sending : " + cmdStr);
+						String reply =  clientThread.serviceRequestSingleSync(cmdStr);
+						Log.d(TAG, "Received: " + reply);
+					}
+				}).start();
+			}
 			lastForward = forward;
 			lastStrafe = strafe;
+			lastTurn = turn;
 		}
 	}
 
@@ -292,5 +314,9 @@ public class TouchJoystick extends View {
 
 	public void setBackgroundDrawable(Drawable drawable) {
 		backgroundDrawable = drawable;
+	}
+
+	public void setClientThread(ZMQClientThread clientThread) {
+		this.clientThread = clientThread;
 	}
 }
