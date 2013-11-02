@@ -2,7 +2,6 @@ package edu.ncsu.ieee.botcontrol;
 
 import java.util.regex.Pattern;
 
-import edu.ncsu.ieee.botcontrol.TouchJoystick.JoystickListener;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -13,6 +12,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.widget.EditText;
+import android.widget.TextView;
+import edu.ncsu.ieee.botcontrol.TouchJoystick.JoystickListener;
 
 /** Touch-based bot control activity. */
 public class BotControl extends Activity implements JoystickListener {
@@ -99,6 +100,10 @@ public class BotControl extends Activity implements JoystickListener {
 	// View elements
 	private TouchJoystick driveJoystick = null;
 	private TouchJoystick turretJoystick = null;
+	private TextView txtForward = null;
+	private TextView txtStrafe = null;
+	private TextView txtPitch = null;
+	private TextView txtYaw = null;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -108,6 +113,10 @@ public class BotControl extends Activity implements JoystickListener {
 		setContentView(R.layout.activity_main);
 		driveJoystick = (TouchJoystick) findViewById(R.id.driveJoystick);
 		turretJoystick = (TouchJoystick) findViewById(R.id.turretJoystick);
+		txtForward = (TextView) findViewById(R.id.txtForward);
+		txtStrafe = (TextView) findViewById(R.id.txtStrafe);
+		txtPitch = (TextView) findViewById(R.id.txtPitch);
+		txtYaw = (TextView) findViewById(R.id.txtYaw);
 		
 		// Initialize control variables
 		lastForward = forward = forwardRange.zero;
@@ -117,11 +126,12 @@ public class BotControl extends Activity implements JoystickListener {
 		lastYaw = yaw = yawRange.zero;
 		
 		// Configure view elements
-		Log.d(TAG, "onCreate(): Configuring joysticks");
-		driveJoystick.updateKnob(strafeRange.toNormalizedInput(strafe), -forwardRange.toNormalizedInput(forward)); // NOTE Y-flip
 		driveJoystick.setJoystickListener(this);
-		turretJoystick.updateKnob(yawRange.toNormalizedInput(yaw), -pitchRange.toNormalizedInput(pitch)); // NOTE Y-flip
 		turretJoystick.setJoystickListener(this);
+		driveJoystick.updateKnob(strafeRange.toNormalizedInput(strafe), -forwardRange.toNormalizedInput(forward)); // NOTE Y-flip
+		turretJoystick.updateKnob(yawRange.toNormalizedInput(yaw), -pitchRange.toNormalizedInput(pitch)); // NOTE Y-flip
+		updateDriveViews();
+		updateTurretViews();
 	}
 
 	@Override
@@ -283,15 +293,16 @@ public class BotControl extends Activity implements JoystickListener {
 	private void doDrive(final boolean block) {
 		// Generate and send drive command, if different from last
 		if (forward != lastForward || strafe != lastStrafe || turn != lastTurn) {
+			updateDriveViews(); // TODO update upon successful reply?
 			sendCommand(
 				// NOTE Hopefully the string literals get compiled into one!
 				String.format(
 					"{" +
 						"cmd: fwd_strafe_turn, " +
 						"opts: {" +
-							"fwd: %f, " +
-							"strafe: %f, " +
-							"turn: %f" +
+							"fwd: %.2f, " +
+							"strafe: %.2f, " +
+							"turn: %.2f" +
 						"}" +
 					"}",
 					forward,
@@ -309,14 +320,15 @@ public class BotControl extends Activity implements JoystickListener {
 	private void doTurret(final boolean block) {
 		// Generate and send turret command, if different from last
 		if (pitch != lastPitch || yaw != lastYaw) {
+			updateTurretViews(); // TODO update upon successful reply?
 			sendCommand(
 				// NOTE Hopefully the string literals get compiled into one!
 				String.format(
 					"{" +
 						"cmd: aim, " +
 						"opts: {" +
-							"pitch: %f, " +
-							"yaw: %f" +
+							"pitch: %.2f, " +
+							"yaw: %.2f" +
 						"}" +
 					"}",
 					pitch,
@@ -344,5 +356,15 @@ public class BotControl extends Activity implements JoystickListener {
 				}
 			}).start();
 		}
+	}
+	
+	private void updateDriveViews() {
+		txtForward.setText(String.format("%7.2f", forward));
+		txtStrafe.setText(String.format("%7.2f", strafe));
+	}
+	
+	private void updateTurretViews() {
+		txtPitch.setText(String.format("%7.2f", pitch));
+		txtYaw.setText(String.format("%7.2f", yaw));
 	}
 }

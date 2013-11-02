@@ -3,7 +3,7 @@
 
     <string name="app_name">Bot Control</string>
     
-    <string name="main_content">Main control area</string>
+    <string name="app_description">Android bot controller</string>
     <string name="action_zmqtest">ZMQ Test</string>
     <string name="action_serverparams">Server params</string><string name="action_settings">Settings</string>
 
