@@ -94,7 +94,7 @@ public class ZMQClientView extends LinearLayout {
 						(new Thread() {
 							public void run() {
 								consoleLogger.log("Sending : " + request);
-								String reply =  clientThread.serviceRequestSingleSync(request);
+								String reply =  clientThread.serviceRequestSync(request, false);
 								consoleLogger.log("Received: " + reply);
 							}
 						}).start();

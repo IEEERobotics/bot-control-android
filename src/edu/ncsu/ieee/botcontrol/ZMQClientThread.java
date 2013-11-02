@@ -44,13 +44,17 @@ public class ZMQClientThread extends ZMQThread {
 		this.serverAddress = serverAddress;
 	}
 	
-	/** Services a request string and returns a reply when done. */
-	public String serviceRequestSync(String request) {
-		RequestReplyBundle requestReplyBundle = new RequestReplyBundle(request);
-		requestQueue.add(requestReplyBundle);
-		while (!requestReplyBundle.serviced)
-			yield();
-		return requestReplyBundle.reply;
+	/** Services a request string and returns a reply when done. Returns null if block is false and service queue is not empty. */
+	public String serviceRequestSync(String request, boolean block) {
+		if (block || requestQueue.isEmpty()) {
+			RequestReplyBundle requestReplyBundle = new RequestReplyBundle(request);
+			requestQueue.add(requestReplyBundle);
+			while (!requestReplyBundle.serviced)
+				yield();
+			return requestReplyBundle.reply;
+		}
+		Log.w(TAG, "serviceRequestSync(): Dropped request: " + request);
+		return null;
 	}
 
 	/** Services a request string and returns a RequestReplyBundle object immediately. Client is expected to test the serviced flag. */
@@ -58,19 +62,6 @@ public class ZMQClientThread extends ZMQThread {
 		RequestReplyBundle requestReplyBundle = new RequestReplyBundle(request);
 		requestQueue.add(requestReplyBundle);
 		return requestReplyBundle;
-	}
-
-	/** Services a request string and returns a reply, only one request at a time. Returns null if any previous requests are being serviced. */
-	public String serviceRequestSingleSync(String request) {
-		if (requestQueue.isEmpty()) {
-			RequestReplyBundle requestReplyBundle = new RequestReplyBundle(request);
-			requestQueue.add(requestReplyBundle);
-			while (!requestReplyBundle.serviced)
-				yield();
-			return requestReplyBundle.reply;
-		}
-		Log.w(TAG, "serviceRequestSingleSync(): Dropped request: " + request);
-		return null;
 	}
 
 	@Override

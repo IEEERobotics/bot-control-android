@@ -17,11 +17,15 @@ import android.view.View;
  * A touch-based joystick that can capture 2-DoF input.
  */
 public class TouchJoystick extends View {
-	private static String TAG = "TouchJoystick";    ///< Tag to be used with log messages
-	private static double minKnobRangeRatio = 0.2; ///< Lower bound for knob's valid input range, expressed as a fraction of available range
-	private static double maxKnobRangeRatio = 0.85;  ///< Upper bound for knob's valid input range, expressed as a fraction of available range
+	private static final String TAG = "TouchJoystick";    ///< Tag to be used with log messages
+	private static final float maxKnobRangeRatio = 0.85f;  ///< Upper bound for knob's valid input range, expressed as a fraction of available range
+	
+	// Shape enum constants (NOTE these need to match values defined in attrs_touch_joystick.xml)
+	private static final int shape_circle = 0;
+	private static final int shape_square = 1;
 	
 	// View-related attributes (read from XML)
+	private int shape = shape_circle; ///< Shape of the joystick's interactive region (used for display as well as limits)
 	private Drawable backgroundDrawable = null; ///< Background image or other drawable; default: null (blank)
 	// TODO Add deadband (zero-region) drawable/radius, and knob drawable/radius
 	private String messageText = null;          ///< Message text to be displayed in the middle; default: null (blank)
@@ -29,32 +33,28 @@ public class TouchJoystick extends View {
 	private float messageFontSize = 16;         ///< Font size to use for message text; default: 16 (pixels?)
 	
 	// Control-related attributes
-	private float centerX = 0.f; ///< Center/neutral X position
-	private float centerY = 0.f; ///< Center/neutral Y position
-	private float knobX = 0.f;   ///< Knob X position (relative to center)
-	private float knobY = 0.f;   ///< Knob Y position (relative to center)
+	private float centerX = 0.f;   ///< Center X position
+	private float centerY = 0.f;   ///< Center Y position
+	public float knobXNorm = 0.f;  ///< Knob X position in [-1, 1] (relative to center, normalized by maxKnobX)
+	public float knobYNorm = 0.f;  ///< Knob Y position in [-1, 1] (relative to center, normalized by maxKnobY)
 	
-	private double knobR = 0.0;      ///< Knob distance from center (i.e. radius, in polar coordinates)
-	private double minKnobR = 30.0;  ///< Minimum knob distance from center to be counted as non-zero; will be updated if view size changes
-	private double maxKnobR = 100.0; ///< Maximum knob distance from center to be counted as valid; will be updated if view size changes
+	public float maxKnobR = 100.f; ///< Maximum knob distance from center; will be updated if view size changes
+	public float maxKnobX = 100.f; ///< Maximum X distance from center; will be updated if view size changes
+	public float maxKnobY = 100.f; ///< Maximum Y distance from center; will be updated if view size changes
+	// NOTE maxKnobX = maxKnobY = maxKnobR when shape = circle
 	
-	private float forward = 0.f;
-	private float strafe = 0.f;
-	private float turn = 0.f;
-	// TODO Turning not implemented yet; turn is always 0
-
-	private float lastForward = 0.f;
-	private float lastStrafe = 0.f;
-	private float lastTurn = 0.f;
-
 	// Display parameters
-	private float knobSize = 25.f; ///< Radius of circle drawn to denote knob position
+	private float knobSize = 20.f; ///< Radius of circle drawn to denote knob position
 	private Paint knobPaint;
+	private Paint axesPaint;
 	private TextPaint messagePaint;
 	private float messageTextWidth;
 	private float messageTextHeight;
 
-	private ZMQClientThread clientThread = null;
+	public interface JoystickListener {
+		public boolean onJoystickEvent(TouchJoystick joystick, int action, float x, float y);
+	}
+	private JoystickListener listener = null;
 
 	public TouchJoystick(Context context) {
 		super(context);
@@ -76,6 +76,7 @@ public class TouchJoystick extends View {
 		final TypedArray a = getContext().obtainStyledAttributes(attrs,
 				R.styleable.TouchJoystick, defStyle, 0);
 		
+		shape = a.getInt(R.styleable.TouchJoystick_shape, shape);
 		backgroundDrawable = a.getDrawable(R.styleable.TouchJoystick_backgroundDrawable);
 		//backgroundDrawable.setCallback(this); // for animated drawables
 		messageText = a.getString(R.styleable.TouchJoystick_messageText);
@@ -87,13 +88,8 @@ public class TouchJoystick extends View {
 
 		// Initialize knob position and other control attributes
 		// NOTE Actual view width and height will only be available in onSizeChanged() [use addOnLayoutChangeListener() instead for API 11+]
-		knobX = 0.f;
-		knobY = 0.f;
-		knobR = 0.f;
-		
-		lastForward = forward = 0.f;
-		lastStrafe = strafe = 0.f;
-		lastTurn = turn = 0.f;
+		knobXNorm = 0.f;
+		knobYNorm = 0.f;
 		
 		// Initialize display parameters
 		knobPaint = new Paint();
@@ -101,6 +97,14 @@ public class TouchJoystick extends View {
 		knobPaint.setStyle(Style.FILL);
 		knobPaint.setColor(Color.argb(200, 200, 200, 255));
 		// NOTE Can also use system colors such as: getContext().getResources().getColor(android.R.color.primary_text_dark)
+		
+		axesPaint = new Paint();
+		axesPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
+		axesPaint.setStyle(Style.STROKE);
+		axesPaint.setStrokeWidth(1.5f);
+		axesPaint.setColor(Color.argb(200, 200, 200, 200));
+		//axesPaint.setPathEffect(new DashPathEffect(new float[] { 10, 20 }, 0)); // dotted/dashed line
+		//setLayerType(LAYER_TYPE_SOFTWARE, null); // needed on Jellybean+ devices to show dotted/dashed line (requires target API 11+)
 		
 		messagePaint = new TextPaint();
 		messagePaint.setFlags(Paint.ANTI_ALIAS_FLAG);
@@ -121,34 +125,23 @@ public class TouchJoystick extends View {
 		centerX = w / 2.f;
 		centerY = h / 2.f;
 		
-		minKnobR = minKnobRangeRatio * (Math.min(w, h) / 2.f);
-		maxKnobR = maxKnobRangeRatio * (Math.min(w, h) / 2.f);
+		// Compute knob range(s)
+		maxKnobX = maxKnobY = maxKnobR = maxKnobRangeRatio * (Math.min(w, h) / 2.f);
+		if (shape == shape_square) {
+			maxKnobX = maxKnobRangeRatio * (w / 2.f);
+			maxKnobY = maxKnobRangeRatio * (h / 2.f);
+		}
 		
-		Log.d(TAG, "onSizeChanged(): Updated center: (" + centerX + ", " + centerY + "), knob range: [" + minKnobR + ", " + maxKnobR + "]");
+		Log.d(TAG, "onSizeChanged(): Updated center: (" + centerX + ", " + centerY + "), knob range: [" + -maxKnobR + ", " + maxKnobR + "]");
+		updateKnob(knobXNorm, knobYNorm);
 	}
 	
 	@Override
 	public boolean onTouchEvent(MotionEvent event) {
-		switch(event.getAction()) {
-		case MotionEvent.ACTION_DOWN:
-			//Log.d(TAG, "onTouchEvent(): [ACTION_DOWN] @ (" + event.getX() + ", " + event.getY() + ")");
-			updateKnob(event.getX() - centerX, event.getY() - centerY);
-			// NOTE Don't produce movement command here, only on ACTION_MOVE, in case this is just a tap
-			return true;
-		
-		case MotionEvent.ACTION_MOVE:
-			//Log.d(TAG, "onTouchEvent(): [ACTION_MOVE] @ (" + event.getX() + ", " + event.getY() + ")");
-			updateKnob(event.getX() - centerX, event.getY() - centerY);
-			doMove();
-			return true;
-		
-		case MotionEvent.ACTION_UP:
-			//Log.d(TAG, "onTouchEvent(): [ACTION_UP] @ (" + event.getX() + ", " + event.getY() + ")");
-			updateKnob(0.f, 0.f);
-			doStop();
-			return true;
-		}
-		return super.onTouchEvent(event);
+		// If a listener is set and it returns true, then return true, else return value from default implementation
+		return ((listener != null
+					&& listener.onJoystickEvent(this, event.getAction(), (event.getX() - centerX) / maxKnobX, (event.getY() - centerY) / maxKnobY))
+				|| super.onTouchEvent(event));
 	}
 
 	@Override
@@ -179,88 +172,54 @@ public class TouchJoystick extends View {
 			canvas.drawText(
 					messageText,
 					paddingLeft + (contentWidth - messageTextWidth) / 2,
-					paddingTop + (contentHeight + messageTextHeight) / 2 + (contentHeight / 4), // slightly offset below vertical middle
+					paddingTop + (contentHeight + messageTextHeight) / 2 - (contentHeight / 4), // slightly offset above vertical middle
 					messagePaint);
 		}
 		
+		// Draw axes lines
+		float drawX = centerX + knobXNorm * maxKnobX, drawY = centerY + knobYNorm * maxKnobY;
+		canvas.drawLine(drawX, 0, drawX, getHeight(), axesPaint);
+		canvas.drawLine(0, drawY, getWidth(), drawY, axesPaint);
+		
 		// Draw joystick knob
-		canvas.drawCircle(centerX + knobX, centerY + knobY, knobSize, knobPaint);
+		canvas.drawCircle(centerX + knobXNorm * maxKnobX, centerY + knobYNorm * maxKnobY, knobSize, knobPaint);
 	}
 	
-	private void updateKnob(final float x, final float y) {
+	public void updateKnob(final float x, final float y) {
 		// Update knob position
-		knobX = x;
-		knobY = y;
+		knobXNorm = x;
+		knobYNorm = y;
 		
-		// Clamp knob position to range
-		knobR = Math.hypot(knobX, knobY);
-		if (knobR > maxKnobR) {
-			/*
-			// Method 1: Clamp radius, compute angle, then project x, y to clamped radius
-			knobR = maxKnobR;
-			double knobTheta = Math.atan2(knobY, knobX);
-			knobX = (float) (maxKnobR * Math.cos(knobTheta));
-			knobY = (float) (maxKnobR * Math.sin(knobTheta));
-			*/
-			
-			// Method 2: Multiply x, y by ratio of max to actual radius (more efficient?)
-			knobX *= (float) (maxKnobR / knobR);
-			knobY *= (float) (maxKnobR / knobR); // hopefully, this is optimized by the compiler to a single division
+		// Clamp knob position to shape-dependent limits
+		switch(shape) {
+		case shape_circle:
+			double knobRNorm = Math.hypot(knobXNorm, knobYNorm);
+			if (knobRNorm > 1.0) {
+				/*
+				// Method 1: Compute angle, then project to unit radius
+				double knobTheta = Math.atan2(knobYNorm, knobXNorm);
+				knobXNorm = (float) Math.cos(knobTheta);
+				knobYNorm = (float) Math.sin(knobTheta);
+				*/
+				
+				// Method 2: Normalize x, y by actual radius (more efficient?)
+				knobXNorm /= (float) knobRNorm;
+				knobYNorm /= (float) knobRNorm;
+			}
+			break;
+		
+		case shape_square:
+			// NOTE The square shape can actually be asymmetric (i.e. a rectangle) since X and Y are clamped independently
+			if (Math.abs(knobXNorm) > 1.f)
+				knobXNorm = Math.copySign(1.f, knobXNorm);
+			if (Math.abs(knobYNorm) > 1.f)
+				knobYNorm = Math.copySign(1.f, knobYNorm);
+			break;
 		}
-		//Log.d(TAG, "updateKnob(): knob @ (" + knobX + ", " + knobY + ")");
+		//Log.d(TAG, "updateKnob(): knob @ (" + knobXNorm + ", " + knobYNorm + ")");
 		
 		// Invalidate view
 		invalidate();
-		
-		// Compute control inputs
-		if (knobR < minKnobR) {
-			forward = 0.f;
-			strafe = 0.f;
-		}
-		else {
-			forward = -100.f * (float) (knobY / maxKnobR); // NOTE Y-flip
-			strafe = 100.f * (float) (knobX / maxKnobR);
-		}
-		//Log.d(TAG, "updateKnob(): forward = " + forward + ", strafe = " + strafe + ", turn = " + turn);
-	}
-
-	private void doStop() {
-		// Generate and send stop command (TODO if not already stopped?)
-		sendCommand(
-				"{cmd: fwd_strafe_turn, " +
-				"opts: {fwd: 0, strafe: 0, turn: 0}}");
-	}
-
-	private void doMove() {
-		// Generate and send movement command (TODO if different from last command?)
-		sendCommand(String.format(
-				"{cmd: fwd_strafe_turn, " +
-				"opts: {fwd: %f, strafe: %f, turn: %f}}",
-				forward,
-				strafe,
-				turn));
-	}
-
-	private void sendCommand(final String cmdStr) {
-		if (lastForward != forward || lastStrafe != strafe || lastTurn != turn) {
-			//Log.d(TAG, "sendCommand(): forward = " + forward + ", strafe = " + strafe + ", turn = " + turn);
-			//Log.d(TAG, "sendCommand(): cmdStr = " + cmdStr);
-			// TODO Send this command (JSON string) to the control server,
-			//   wait for ACK, deal with concurrency issues
-			if (clientThread != null && clientThread.isAlive()) {
-				// Start a new thread to avoid blocking the main (UI) thread
-				(new Thread() {
-					public void run() {
-						Log.d(TAG, "Sending : " + cmdStr);
-						String reply =  clientThread.serviceRequestSingleSync(cmdStr);
-						Log.d(TAG, "Received: " + reply);
-					}
-				}).start();
-			}
-			lastForward = forward;
-			lastStrafe = strafe;
-			lastTurn = turn;
-		}
 	}
 
 	private void updateMessageDisplayParams() {
@@ -316,7 +275,7 @@ public class TouchJoystick extends View {
 		backgroundDrawable = drawable;
 	}
 
-	public void setClientThread(ZMQClientThread clientThread) {
-		this.clientThread = clientThread;
+	public void setJoystickListener(JoystickListener listener) {
+		this.listener = listener;
 	}
 }
