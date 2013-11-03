@@ -11,12 +11,14 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import edu.ncsu.ieee.botcontrol.TouchJoystick.JoystickListener;
 
 /** Touch-based bot control activity. */
-public class BotControl extends Activity implements JoystickListener {
+public class BotControl extends Activity implements TouchJoystick.JoystickListener {
 	private static final String TAG = "BotControl";
 
 	/** Convenience class for specifying control ranges. */
@@ -104,6 +106,8 @@ public class BotControl extends Activity implements JoystickListener {
 	private TextView txtStrafe = null;
 	private TextView txtPitch = null;
 	private TextView txtYaw = null;
+	private Button btnReload = null;
+	private Button btnFire = null;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -117,6 +121,8 @@ public class BotControl extends Activity implements JoystickListener {
 		txtStrafe = (TextView) findViewById(R.id.txtStrafe);
 		txtPitch = (TextView) findViewById(R.id.txtPitch);
 		txtYaw = (TextView) findViewById(R.id.txtYaw);
+		btnReload = (Button) findViewById(R.id.btnReload);
+		btnFire = (Button) findViewById(R.id.btnFire);
 		
 		// Initialize control variables
 		lastForward = forward = forwardRange.zero;
@@ -132,6 +138,18 @@ public class BotControl extends Activity implements JoystickListener {
 		turretJoystick.updateKnob(yawRange.toNormalizedInput(yaw), -pitchRange.toNormalizedInput(pitch)); // NOTE Y-flip
 		updateDriveViews();
 		updateTurretViews();
+		btnReload.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				doReload(false); // ok to drop (TODO show visual indication of success/failure, e.g. with button color?)
+			}
+		});
+		btnFire.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				doFire(false); // ok to drop (TODO show visual indication of success/failure, e.g. with button color?)
+			}
+		});
 	}
 
 	@Override
@@ -165,8 +183,8 @@ public class BotControl extends Activity implements JoystickListener {
 			Log.d(TAG, "onOptionsItemSelected(): Getting new server params...");
 			// Build a dialog
 			final AlertDialog.Builder serverParamsDialog = new AlertDialog.Builder(BotControl.this);
-			serverParamsDialog.setTitle("Server params");
-			serverParamsDialog.setMessage("Bot server IP address:");
+			serverParamsDialog.setTitle("Connect to server");
+			serverParamsDialog.setMessage("IP address:");
 			
 			// Set an EditText view to get user input 
 			final EditText txtServerHost = new EditText(BotControl.this);
@@ -174,7 +192,7 @@ public class BotControl extends Activity implements JoystickListener {
 			serverParamsDialog.setView(txtServerHost);
 			
 			// Set button actions
-			serverParamsDialog.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+			serverParamsDialog.setPositiveButton("Connect", new DialogInterface.OnClickListener() {
 				public void onClick(DialogInterface dialog, int whichButton) {
 					String newServerHost = txtServerHost.getText().toString();
 					Log.d(TAG, "onOptionsItemSelected(): [serverParamsDialog] New server host: " + newServerHost);
@@ -196,12 +214,37 @@ public class BotControl extends Activity implements JoystickListener {
 				}
 			});
 			
+			// Show dialog
 			serverParamsDialog.show();
 			
 			// TODO Create ServerParams activity instead of dialog
-			//Intent serverParamsIntent = new Intent(this, ZMQTest.class);
+			//Intent serverParamsIntent = new Intent(this, ServerParams.class);
 			//startActivity(serverParamsIntent);
 			
+			return true;
+		
+		case R.id.action_killserver:
+			// Build a confirmation dialog
+			final AlertDialog.Builder killServerDialog = new AlertDialog.Builder(BotControl.this);
+			killServerDialog.setTitle("Kill server");
+			killServerDialog.setMessage("Are you sure you want to kill the server instance?");
+			
+			// Set button actions
+			killServerDialog.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+				public void onClick(DialogInterface dialog, int whichButton) {
+					Log.d(TAG, "onOptionsItemSelected(): [killServerDialog] Killing server...");
+					doKillServer(false); // ok to drop (try again later?)
+				}
+			});
+			killServerDialog.setNegativeButton("No", new DialogInterface.OnClickListener() {
+				@Override
+				public void onClick(DialogInterface dialog, int whichButton) {
+					dialog.cancel();
+				}
+			});
+			
+			// Show dialog
+			killServerDialog.show();
 			return true;
 		
 		case R.id.action_settings:
@@ -322,7 +365,6 @@ public class BotControl extends Activity implements JoystickListener {
 		if (pitch != lastPitch || yaw != lastYaw) {
 			updateTurretViews(); // TODO update upon successful reply?
 			sendCommand(
-				// NOTE Hopefully the string literals get compiled into one!
 				String.format(
 					"{" +
 						"cmd: aim, " +
@@ -339,6 +381,21 @@ public class BotControl extends Activity implements JoystickListener {
 			lastPitch = pitch;
 			lastYaw = yaw;
 		}
+	}
+
+	private void doReload(final boolean block) {
+		// Generate and send reload command
+		sendCommand("{cmd: advance_dart, opts: {}}", block);
+	}
+
+	private void doFire(final boolean block) {
+		// Generate and send fire command
+		sendCommand("{cmd: fire, opts: {}}", block);
+	}
+
+	private void doKillServer(final boolean block) {
+		// Generate and send kill command to stop server
+		sendCommand("{cmd: die, opts: {}}", block);
 	}
 
 	private void sendCommand(final String cmdStr, final boolean block) {

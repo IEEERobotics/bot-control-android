@@ -17,150 +17,167 @@
         android:layout_alignParentRight="true"
         android:text="@string/app_description" />
 
-    <LinearLayout
-        android:id="@+id/driveGroup"
-        android:layout_width="wrap_content"
+    <RelativeLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:layout_alignParentLeft="true"
-        android:layout_marginBottom="50dp"
-        android:layout_marginLeft="50dp"
-        android:orientation="vertical" >
+        android:layout_marginBottom="50dp" >
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:id="@+id/driveGroup"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal" >
+            android:layout_alignParentLeft="true"
+            android:layout_marginLeft="50dp"
+            android:orientation="vertical" >
 
-            <TextView
-                android:id="@+id/lblForward"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1.0"
-                android:gravity="right"
-                android:labelFor="@+id/txtForward"
-                android:text="Forward: " />
+                android:orientation="horizontal" >
 
-            <TextView
-                android:id="@+id/txtForward"
+                <TextView
+                    android:id="@+id/lblForward"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.0"
+                    android:gravity="right"
+                    android:labelFor="@+id/txtForward"
+                    android:text="Forward: " />
+
+                <TextView
+                    android:id="@+id/txtForward"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.0"
+                    android:text="0.0"
+                    android:typeface="monospace" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1.0"
-                android:text="0.0"
-                android:typeface="monospace" />
+                android:orientation="horizontal" >
+
+                <TextView
+                    android:id="@+id/lblStrafe"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.0"
+                    android:gravity="right"
+                    android:labelFor="@+id/txtStrafe"
+                    android:text="Strafe: " />
+
+                <TextView
+                    android:id="@+id/txtStrafe"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.0"
+                    android:text="0.0"
+                    android:typeface="monospace" />
+            </LinearLayout>
+
+            <edu.ncsu.ieee.botcontrol.TouchJoystick
+                android:id="@+id/driveJoystick"
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:layout_marginTop="25dp"
+                android:padding="12dp"
+                app:backgroundDrawable="@drawable/ring"
+                app:messageColor="@android:color/secondary_text_dark"
+                app:messageFontSize="16sp"
+                app:messageText="Drive" />
         </LinearLayout>
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:id="@+id/turretGroup"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal" >
+            android:layout_alignParentRight="true"
+            android:layout_marginRight="50dp"
+            android:orientation="vertical" >
 
-            <TextView
-                android:id="@+id/lblStrafe"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1.0"
-                android:gravity="right"
-                android:labelFor="@+id/txtStrafe"
-                android:text="Strafe: " />
+                android:orientation="horizontal" >
 
-            <TextView
-                android:id="@+id/txtStrafe"
+                <TextView
+                    android:id="@+id/lblPitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.0"
+                    android:gravity="right"
+                    android:labelFor="@+id/txtPitch"
+                    android:text="Pitch: " />
+
+                <TextView
+                    android:id="@+id/txtPitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.0"
+                    android:text="90.0"
+                    android:typeface="monospace" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1.0"
-                android:text="0.0"
-                android:typeface="monospace" />
+                android:orientation="horizontal" >
+
+                <TextView
+                    android:id="@+id/lblYaw"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.0"
+                    android:gravity="right"
+                    android:labelFor="@+id/txtYaw"
+                    android:text="Yaw: " />
+
+                <TextView
+                    android:id="@+id/txtYaw"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.0"
+                    android:text="90.0"
+                    android:typeface="monospace" />
+            </LinearLayout>
+
+            <edu.ncsu.ieee.botcontrol.TouchJoystick
+                android:id="@+id/turretJoystick"
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:layout_marginTop="25dp"
+                android:padding="12dp"
+                app:backgroundDrawable="@drawable/rect"
+                app:messageColor="@android:color/secondary_text_dark"
+                app:messageFontSize="16sp"
+                app:messageText="Turret"
+                app:shape="square" />
         </LinearLayout>
-
-        <edu.ncsu.ieee.botcontrol.TouchJoystick
-            android:id="@+id/driveJoystick"
-            android:layout_width="200dp"
-            android:layout_height="200dp"
-            android:layout_marginTop="25dp"
-            android:padding="12dp"
-            app:backgroundDrawable="@drawable/ring"
-            app:messageColor="@android:color/secondary_text_dark"
-            app:messageFontSize="16sp"
-            app:messageText="Drive" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/turretGroup"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentRight="true"
-        android:layout_marginBottom="50dp"
-        android:layout_marginRight="50dp"
-        android:orientation="vertical" >
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:id="@+id/buttonGroup"
+            android:layout_width="90dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal" >
+            android:layout_centerHorizontal="true"
+            android:gravity="center_horizontal"
+            android:orientation="vertical" >
 
-            <TextView
-                android:id="@+id/lblPitch"
+            <Button
+                android:id="@+id/btnReload"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1.0"
-                android:gravity="right"
-                android:labelFor="@+id/txtPitch"
-                android:text="Pitch: " />
+                android:text="Reload" />
 
-            <TextView
-                android:id="@+id/txtPitch"
+            <Button
+                android:id="@+id/btnFire"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1.0"
-                android:text="90.0"
-                android:typeface="monospace" />
+                android:text="Fire!" />
+
         </LinearLayout>
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" >
-
-            <TextView
-                android:id="@+id/lblYaw"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_weight="1.0"
-                android:gravity="right"
-                android:labelFor="@+id/txtYaw"
-                android:text="Yaw: " />
-
-            <TextView
-                android:id="@+id/txtYaw"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_weight="1.0"
-                android:text="90.0"
-                android:typeface="monospace" />
-        </LinearLayout>
-
-        <edu.ncsu.ieee.botcontrol.TouchJoystick
-            android:id="@+id/turretJoystick"
-            android:layout_width="200dp"
-            android:layout_height="200dp"
-            android:layout_marginTop="25dp"
-            android:padding="12dp"
-            app:backgroundDrawable="@drawable/rect"
-            app:messageColor="@android:color/secondary_text_dark"
-            app:messageFontSize="16sp"
-            app:messageText="Turret"
-            app:shape="square" />
-    </LinearLayout>
-
-    <Button
-        android:id="@+id/btnFire"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentRight="true"
-        android:layout_centerVertical="true"
-        android:layout_margin="12dp"
-        android:text="Fire!" />
+    </RelativeLayout>
 
 </RelativeLayout>

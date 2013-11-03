@@ -1,11 +1,28 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android" >
 
-    <item android:id="@+id/action_zmqtest" android:title="@string/action_zmqtest"></item><item android:id="@+id/action_serverparams" android:title="@string/action_serverparams"></item><item
+    <item
+        android:id="@+id/action_serverparams"
+        android:title="@string/action_serverparams"
+        android:icon="@android:drawable/ic_menu_upload">
+    </item>
+    <item
+        android:id="@+id/action_killserver"
+        android:title="@string/action_killserver"
+        android:icon="@android:drawable/ic_menu_close_clear_cancel">
+    </item>
+    <item
+        android:id="@+id/action_zmqtest"
+        android:title="@string/action_zmqtest"
+        android:icon="@android:drawable/ic_media_play"
+        android:orderInCategory="99"
+        android:showAsAction="never">
+    </item>
+    <item
         android:id="@+id/action_settings"
+        android:title="@string/action_settings"
+        android:icon="@android:drawable/ic_menu_preferences"
         android:orderInCategory="100"
-        android:showAsAction="never"
-        android:title="@string/action_settings"/>
-    
-    
+        android:showAsAction="never">
+    </item>
 
 </menu>

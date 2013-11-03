@@ -5,6 +5,8 @@
     
     <string name="app_description">Android bot controller</string>
     <string name="action_zmqtest">ZMQ Test</string>
-    <string name="action_serverparams">Server params</string><string name="action_settings">Settings</string>
+    <string name="action_serverparams">Connect to server</string>
+    <string name="action_killserver">Kill server</string>
+    <string name="action_settings">Settings</string>
 
 </resources>
