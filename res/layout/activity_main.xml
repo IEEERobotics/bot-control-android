@@ -17,47 +17,14 @@
         android:layout_alignParentRight="true"
         android:text="@string/app_description" />
 
-    <edu.ncsu.ieee.botcontrol.TouchJoystick
-        android:id="@+id/driveJoystick"
-        android:layout_width="200dp"
-        android:layout_height="200dp"
+    <LinearLayout
+        android:id="@+id/driveGroup"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:layout_alignParentLeft="true"
         android:layout_marginBottom="50dp"
         android:layout_marginLeft="50dp"
-        android:paddingBottom="12dp"
-        android:paddingLeft="12dp"
-        android:paddingRight="12dp"
-        android:paddingTop="12dp"
-        app:backgroundDrawable="@drawable/ring"
-        app:messageColor="@android:color/secondary_text_dark"
-        app:messageFontSize="16sp"
-        app:messageText="Drive" />
-
-    <edu.ncsu.ieee.botcontrol.TouchJoystick
-        android:id="@+id/turretJoystick"
-        android:layout_width="200dp"
-        android:layout_height="200dp"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentRight="true"
-        android:layout_marginBottom="50dp"
-        android:layout_marginRight="50dp"
-        android:paddingBottom="12dp"
-        android:paddingLeft="12dp"
-        android:paddingRight="12dp"
-        android:paddingTop="12dp"
-        app:shape="square"
-        app:backgroundDrawable="@drawable/rect"
-        app:messageColor="@android:color/secondary_text_dark"
-        app:messageFontSize="16sp"
-        app:messageText="Turret" />
-
-    <LinearLayout
-        android:layout_width="200dp"
-        android:layout_height="wrap_content"
-        android:layout_above="@+id/driveJoystick"
-        android:layout_alignLeft="@+id/driveJoystick"
-        android:layout_marginBottom="50dp"
         android:orientation="vertical" >
 
         <LinearLayout
@@ -73,7 +40,7 @@
                 android:gravity="right"
                 android:labelFor="@+id/txtForward"
                 android:text="Forward: " />
-        
+
             <TextView
                 android:id="@+id/txtForward"
                 android:layout_width="match_parent"
@@ -81,9 +48,8 @@
                 android:layout_weight="1.0"
                 android:text="0.0"
                 android:typeface="monospace" />
-
         </LinearLayout>
-        
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -97,7 +63,7 @@
                 android:gravity="right"
                 android:labelFor="@+id/txtStrafe"
                 android:text="Strafe: " />
-        
+
             <TextView
                 android:id="@+id/txtStrafe"
                 android:layout_width="match_parent"
@@ -105,17 +71,28 @@
                 android:layout_weight="1.0"
                 android:text="0.0"
                 android:typeface="monospace" />
-
         </LinearLayout>
-        
+
+        <edu.ncsu.ieee.botcontrol.TouchJoystick
+            android:id="@+id/driveJoystick"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
+            android:layout_marginTop="25dp"
+            android:padding="12dp"
+            app:backgroundDrawable="@drawable/ring"
+            app:messageColor="@android:color/secondary_text_dark"
+            app:messageFontSize="16sp"
+            app:messageText="Drive" />
     </LinearLayout>
-    
+
     <LinearLayout
-        android:layout_width="200dp"
+        android:id="@+id/turretGroup"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_above="@+id/turretJoystick"
-        android:layout_alignLeft="@+id/turretJoystick"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentRight="true"
         android:layout_marginBottom="50dp"
+        android:layout_marginRight="50dp"
         android:orientation="vertical" >
 
         <LinearLayout
@@ -131,7 +108,7 @@
                 android:gravity="right"
                 android:labelFor="@+id/txtPitch"
                 android:text="Pitch: " />
-        
+
             <TextView
                 android:id="@+id/txtPitch"
                 android:layout_width="match_parent"
@@ -139,9 +116,8 @@
                 android:layout_weight="1.0"
                 android:text="90.0"
                 android:typeface="monospace" />
-
         </LinearLayout>
-        
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -155,7 +131,7 @@
                 android:gravity="right"
                 android:labelFor="@+id/txtYaw"
                 android:text="Yaw: " />
-        
+
             <TextView
                 android:id="@+id/txtYaw"
                 android:layout_width="match_parent"
@@ -163,9 +139,28 @@
                 android:layout_weight="1.0"
                 android:text="90.0"
                 android:typeface="monospace" />
-
         </LinearLayout>
-        
+
+        <edu.ncsu.ieee.botcontrol.TouchJoystick
+            android:id="@+id/turretJoystick"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
+            android:layout_marginTop="25dp"
+            android:padding="12dp"
+            app:backgroundDrawable="@drawable/rect"
+            app:messageColor="@android:color/secondary_text_dark"
+            app:messageFontSize="16sp"
+            app:messageText="Turret"
+            app:shape="square" />
     </LinearLayout>
-    
+
+    <Button
+        android:id="@+id/btnFire"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentRight="true"
+        android:layout_centerVertical="true"
+        android:layout_margin="12dp"
+        android:text="Fire!" />
+
 </RelativeLayout>
