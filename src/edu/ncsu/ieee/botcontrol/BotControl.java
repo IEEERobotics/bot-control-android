@@ -18,7 +18,7 @@ import android.widget.EditText;
 import android.widget.TextView;
 
 /** Touch-based bot control activity. */
-public class BotControl extends Activity implements TouchJoystick.JoystickListener {
+public class BotControl extends Activity implements TouchJoystick.JoystickListener, ZMQSubscriberThread.OnMessageListener {
 	private static final String TAG = "BotControl";
 
 	/** Convenience class for specifying control ranges. */
@@ -92,12 +92,18 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	
 	private float lastPitch = pitch;
 	private float lastYaw = yaw;
+	
+	// Topics of streaming messages to subscribe to
+	// TODO Enable topics: "drive" (forward, strafe, turn), "turret" (pitch, yaw), "ir" (front, back, left, right)
+	private String[] subscriptionTopics = { "turret_pitch", "turret_yaw", "ir" };
 
 	// Communication
 	private String serverProtocol = "tcp";
 	private String serverHost = "10.0.2.2"; // NOTE When running on an emulator, 10.0.2.2 refers to the host computer
 	private int serverPort = 60000;
+	private int pubServerPort = 60001;
 	private ZMQClientThread clientThread = null;
+	private ZMQSubscriberThread subscriberThread = null;
 
 	// View elements
 	private TouchJoystick driveJoystick = null;
@@ -156,10 +162,12 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	protected void onResume() {
 		super.onResume();
 		startClient();
+		startSubscriber();
 	}
 
 	@Override
 	protected void onPause() {
+		stopSubscriber();
 		stopClient();
 		super.onPause();
 	}
@@ -254,11 +262,13 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		return super.onOptionsItemSelected(item);
 	}
 
-	private void setServerHost(String newServerHost) {
-		serverHost = newServerHost;
-		Log.d(TAG, "setServerHost(): Resetting client thread...");
+	private void setServerHost(String serverHost) {
+		Log.d(TAG, "setServerHost(): Resetting client threads...");
+		stopSubscriber();
 		stopClient();
+		this.serverHost = serverHost;
 		startClient();
+		startSubscriber();
 	}
 
 	private void startClient() {
@@ -273,6 +283,23 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			Log.d(TAG, "stopClient(): Stopping client thread...");
 			clientThread.term();
 			clientThread = null;
+		}
+	}
+	
+	private void startSubscriber() {
+		stopSubscriber();
+		Log.d(TAG, "startSubscriber(): Starting subscriber thread...");
+		subscriberThread = new ZMQSubscriberThread(serverProtocol, serverHost, pubServerPort);
+		subscriberThread.setTopics(subscriptionTopics);
+		subscriberThread.setListener(this);
+		subscriberThread.start();
+	}
+	
+	private void stopSubscriber() {
+		if (subscriberThread != null) {
+			Log.d(TAG, "stopSubscriber(): Stopping subscriber thread...");
+			subscriberThread.term();
+			subscriberThread = null;
 		}
 	}
 
@@ -363,7 +390,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private void doTurret(final boolean block) {
 		// Generate and send turret command, if different from last
 		if (pitch != lastPitch || yaw != lastYaw) {
-			updateTurretViews(); // TODO update upon successful reply?
+			//updateTurretViews(); // update upon receiving a message from subscriber
 			sendCommand(
 				String.format(
 					"{" +
@@ -415,6 +442,42 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		}
 	}
 	
+	@Override
+	public void onMessage(String message) {
+		String messageParts[] = message.split("\\s", 2); // split message into 2 parts on first whitespace
+		if (messageParts.length < 2) {
+			Log.w(TAG, "onMessage(): Ignoring invalid message: \"" + message + "\"");
+			return;
+		}
+		
+		String topic = messageParts[0].trim();
+		String data = messageParts[1].trim();
+		try {
+			// TODO Handle drive updates (forward, strafe, turn)
+			// TODO Combine turret updates (pitch, yaw) into one
+			// TODO Handle IR array updates [topic.startsWith("ir")]
+			if (topic.equals("turret_pitch")) {
+				final float realPitch = Float.parseFloat(data);
+				runOnUiThread(new Runnable() {
+					public void run() {
+						txtPitch.setText(String.format("%7.2f", realPitch)); //updateTurretViews();
+					};
+				});
+			}
+			else if (topic.equals("turret_yaw")) {
+				final float realYaw = Float.parseFloat(data);
+				runOnUiThread(new Runnable() {
+					public void run() {
+						txtYaw.setText(String.format("%7.2f", realYaw)); //updateTurretViews();
+					};
+				});
+			}
+		}
+		catch (NumberFormatException e) {
+			Log.w(TAG, "onMessage(): [topic=" + topic + "] Ignoring invalid data: \"" + data + "\"");
+		}
+	}
+	
 	private void updateDriveViews() {
 		txtForward.setText(String.format("%7.2f", forward));
 		txtStrafe.setText(String.format("%7.2f", strafe));
@@ -424,4 +487,5 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		txtPitch.setText(String.format("%7.2f", pitch));
 		txtYaw.setText(String.format("%7.2f", yaw));
 	}
+
 }

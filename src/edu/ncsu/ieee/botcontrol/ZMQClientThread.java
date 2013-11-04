@@ -39,7 +39,7 @@ public class ZMQClientThread extends ZMQThread {
 		this(serverProtocol + "://" + serverHost + ":" + serverPort);
 	}
 	
-		public ZMQClientThread(String serverAddress) {
+	public ZMQClientThread(String serverAddress) {
 		super(ZMQ.REQ);
 		this.serverAddress = serverAddress;
 	}
@@ -81,7 +81,7 @@ public class ZMQClientThread extends ZMQThread {
 				requestReply.serviced = true;
 				Log.d(TAG, "run(): Received: " + requestReply.reply);
 			} catch (InterruptedException e) {
-				Log.d(TAG, "Interrupted!");
+				Log.d(TAG, "run(): Interrupted!");
 				break;
 			} catch(ZMQException e) {
 				Log.d(TAG, "run(): ZMQException (expected - ZMQ context terminated): " + e);
@@ -89,7 +89,7 @@ public class ZMQClientThread extends ZMQThread {
 					break;
 				}
 			} catch (ZError.IOException e) {
-				Log.w(TAG, "Closed by interrupt (still waiting to send)? Exception: " + e);
+				Log.w(TAG, "run(): Closed by interrupt (still waiting to send)? Exception: " + e);
 				return; // skip trying to close socket - it'll cause another exception
 			}
 		}
