@@ -164,11 +164,19 @@
             android:gravity="center_horizontal"
             android:orientation="vertical" >
 
-            <Button
-                android:id="@+id/btnReload"
+            <ToggleButton
+                android:id="@+id/btnLaser"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Reload" />
+                android:textOff="Laser OFF"
+                android:textOn="Laser ON" />
+
+            <ToggleButton
+                android:id="@+id/btnSpin"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textOff="Spin OFF"
+                android:textOn="Spin ON" />
 
             <Button
                 android:id="@+id/btnFire"

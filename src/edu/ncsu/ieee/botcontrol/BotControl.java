@@ -16,6 +16,7 @@ import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.ToggleButton;
 
 /** Touch-based bot control activity. */
 public class BotControl extends Activity implements TouchJoystick.JoystickListener, ZMQSubscriberThread.OnMessageListener {
@@ -84,14 +85,20 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private float lastTurn = turn;
 	
 	// Turret variables and ranges (TODO Check pitch and yaw ranges)
-	private static final ControlRange pitchRange = new ControlRange(75.f, 90.f, 90.f, 90.f, 135.f);
+	private static final ControlRange pitchRange = new ControlRange(60.f, 90.f, 90.f, 90.f, 120.f);
 	private float pitch = pitchRange.zero;
 	
-	private static final ControlRange yawRange = new ControlRange(30.f, 90.f, 90.f, 90.f, 150.f);
+	private static final ControlRange yawRange = new ControlRange(10.f, 90.f, 90.f, 90.f, 170.f);
 	private float yaw = yawRange.zero;
 	
 	private float lastPitch = pitch;
 	private float lastYaw = yaw;
+	
+	// Gun variables
+	private int laser = 0;
+	private int lastLaser = laser;
+	private int spin = 0;
+	private int lastSpin = spin;
 	
 	// Topics of streaming messages to subscribe to
 	// TODO Enable topics: "drive" (forward, strafe, turn), "turret" (pitch, yaw), "ir" (front, back, left, right)
@@ -112,7 +119,8 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private TextView txtStrafe = null;
 	private TextView txtPitch = null;
 	private TextView txtYaw = null;
-	private Button btnReload = null;
+	private ToggleButton btnLaser = null;
+	private ToggleButton btnSpin = null;
 	private Button btnFire = null;
 
 	@Override
@@ -127,27 +135,38 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		txtStrafe = (TextView) findViewById(R.id.txtStrafe);
 		txtPitch = (TextView) findViewById(R.id.txtPitch);
 		txtYaw = (TextView) findViewById(R.id.txtYaw);
-		btnReload = (Button) findViewById(R.id.btnReload);
+		btnLaser = (ToggleButton) findViewById(R.id.btnLaser);
+		btnSpin = (ToggleButton) findViewById(R.id.btnSpin);
 		btnFire = (Button) findViewById(R.id.btnFire);
 		
-		// Initialize control variables
+		// Initialize variables
 		lastForward = forward = forwardRange.zero;
 		lastStrafe = strafe = strafeRange.zero;
 		lastTurn = turn = turnRange.zero;
 		lastPitch = pitch = pitchRange.zero;
 		lastYaw = yaw = yawRange.zero;
+		lastLaser = laser = 0;
+		lastSpin = spin = 0;
 		
 		// Configure view elements
 		driveJoystick.setJoystickListener(this);
 		turretJoystick.setJoystickListener(this);
 		driveJoystick.updateKnob(strafeRange.toNormalizedInput(strafe), -forwardRange.toNormalizedInput(forward)); // NOTE Y-flip
-		turretJoystick.updateKnob(yawRange.toNormalizedInput(yaw), -pitchRange.toNormalizedInput(pitch)); // NOTE Y-flip
+		turretJoystick.updateKnob(yawRange.toNormalizedInput(yaw), pitchRange.toNormalizedInput(pitch));
 		updateDriveViews();
 		updateTurretViews();
-		btnReload.setOnClickListener(new OnClickListener() {
+		btnLaser.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				doReload(false); // ok to drop (TODO show visual indication of success/failure, e.g. with button color?)
+				laser = (btnLaser.isChecked() ? 1 : 0);
+				doLaser(false); // ok to drop (on reply, show visual indication of success/failure with toggle button state)
+			}
+		});
+		btnSpin.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				spin = (btnSpin.isChecked() ? 1 : 0);
+				doSpin(false); // ok to drop (on reply, show visual indication of success/failure with toggle button state)
 			}
 		});
 		btnFire.setOnClickListener(new OnClickListener() {
@@ -345,7 +364,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 				turretJoystick.updateKnob(x, y);
 				
 				// Compute control inputs
-				pitch = pitchRange.fromNormalizedInput(-turretJoystick.knobYNorm); // NOTE Y-flip
+				pitch = pitchRange.fromNormalizedInput(turretJoystick.knobYNorm);
 				yaw = yawRange.fromNormalizedInput(turretJoystick.knobXNorm);
 				//Log.d(TAG, "onJoystickEvent(): [turret/ACTION_MOVE] pitch = " + pitch + ", yaw = " + yaw);
 				
@@ -363,7 +382,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private void doDrive(final boolean block) {
 		// Generate and send drive command, if different from last
 		if (forward != lastForward || strafe != lastStrafe || turn != lastTurn) {
-			updateDriveViews(); // TODO update upon successful reply?
+			updateDriveViews(); // TODO use callback to update upon successful reply
 			sendCommand(
 				// NOTE Hopefully the string literals get compiled into one!
 				String.format(
@@ -390,7 +409,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private void doTurret(final boolean block) {
 		// Generate and send turret command, if different from last
 		if (pitch != lastPitch || yaw != lastYaw) {
-			//updateTurretViews(); // update upon receiving a message from subscriber
+			//updateTurretViews(); // TODO use callback to update upon successful reply (currently uses subscriber)
 			sendCommand(
 				String.format(
 					"{" +
@@ -410,9 +429,66 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		}
 	}
 
-	private void doReload(final boolean block) {
-		// Generate and send reload command
-		sendCommand("{cmd: advance_dart, opts: {}}", block);
+	private void doLaser(final boolean block) {
+		// Generate and send laser ON/OFF command
+		sendCommand(
+			String.format(
+				"{" +
+					"cmd: laser, " +
+					"opts: {" +
+						"state: %d" +
+					"}" +
+				"}",
+				laser),
+			block,
+			new CommandReplyCallback() {
+				@Override
+				public void onReply(final String reply) {
+					// TODO Parse JSON and update according to returned status and result contained in reply?
+					if (reply == null || reply.startsWith("Error")) {
+						runOnUiThread(new Runnable() {
+							public void run() {
+								laser = lastLaser; // restore last laser state
+								btnLaser.setChecked(laser == 1);
+							}
+						});
+					}
+					else {
+						lastLaser = laser;
+					}
+				}
+			});
+	}
+
+	private void doSpin(final boolean block) {
+		// Generate and send gun motor spin ON/OFF command
+		sendCommand(
+			String.format(
+				"{" +
+					"cmd: spin, " +
+					"opts: {" +
+						"state: %d" +
+					"}" +
+				"}",
+				spin),
+			block,
+			new CommandReplyCallback() {
+				@Override
+				public void onReply(final String reply) {
+					// TODO Parse JSON and update according to returned status and result contained in reply?
+					if (reply == null || reply.startsWith("Error")) {
+						runOnUiThread(new Runnable() {
+							public void run() {
+								spin = lastSpin; // restore last spin state
+								btnSpin.setChecked(spin == 1);
+							}
+						});
+					}
+					else {
+						lastSpin = spin;
+					}
+				}
+			});
 	}
 
 	private void doFire(final boolean block) {
@@ -426,6 +502,13 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	}
 
 	private void sendCommand(final String cmdStr, final boolean block) {
+		sendCommand(cmdStr, block, null);
+	}
+	
+	public interface CommandReplyCallback {
+		public void onReply(final String reply);
+	}
+	private void sendCommand(final String cmdStr, final boolean block, final CommandReplyCallback callback) {
 		//Log.d(TAG, "sendCommand(): forward = " + forward + ", strafe = " + strafe + ", turn = " + turn);
 		// Send this command (JSON string) to the control server,
 		//   wait for ACK, deal with concurrency issues
@@ -434,9 +517,11 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			(new Thread() {
 				public void run() {
 					//Log.d(TAG, "Sending : " + cmdStr);
-					clientThread.serviceRequestSync(cmdStr, block);
+					String reply = clientThread.serviceRequestSync(cmdStr, block);
 					//Log.d(TAG, "Received: " + reply);
-					// TODO Check reply to see if it was successful or not (and copy values sent back?)
+					if (callback != null) {
+						callback.onReply(reply);
+					}
 				}
 			}).start();
 		}
