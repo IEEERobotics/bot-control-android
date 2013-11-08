@@ -1,5 +1,6 @@
 package edu.ncsu.ieee.botcontrol;
 
+import java.io.StringReader;
 import java.util.regex.Pattern;
 
 import android.app.Activity;
@@ -7,6 +8,7 @@ import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.JsonReader;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -382,7 +384,6 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private void doDrive(final boolean block) {
 		// Generate and send drive command, if different from last
 		if (forward != lastForward || strafe != lastStrafe || turn != lastTurn) {
-			updateDriveViews(); // TODO use callback to update upon successful reply
 			sendCommand(
 				// NOTE Hopefully the string literals get compiled into one!
 				String.format(
@@ -397,19 +398,37 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 					forward,
 					strafe,
 					turn),
-				block);
-			
-			// Store last sent values to prevent repeats (NOTE these are only values *sent*, not necessarily received by the server)
-			lastForward = forward;
-			lastStrafe = strafe;
-			lastTurn = turn;
+				block,
+				new CommandReplyCallback() {
+					@Override
+					public void onReply(final String reply) {
+						// TODO Parse JSON and update according to returned status and result contained in reply?
+						if (reply == null || reply.startsWith("Error")) {
+							// Restore last drive state
+							forward = lastForward;
+							strafe = lastStrafe;
+							turn = lastTurn;
+						}
+						else {
+							// Update drive state and views
+							lastForward = forward;
+							lastStrafe = strafe;
+							lastTurn = turn;
+							runOnUiThread(new Runnable() {
+								public void run() {
+									updateDriveViews();
+								}
+							});
+						}
+					}
+				}
+			);
 		}
 	}
 
 	private void doTurret(final boolean block) {
 		// Generate and send turret command, if different from last
 		if (pitch != lastPitch || yaw != lastYaw) {
-			//updateTurretViews(); // TODO use callback to update upon successful reply (currently uses subscriber)
 			sendCommand(
 				String.format(
 					"{" +
@@ -421,11 +440,29 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 					"}",
 					pitch,
 					yaw),
-				block);
-			
-			// Store last sent values to prevent repeats (NOTE these are only values *sent*, not necessarily received by the server)
-			lastPitch = pitch;
-			lastYaw = yaw;
+				block,
+				new CommandReplyCallback() {
+					@Override
+					public void onReply(final String reply) {
+						// TODO Parse JSON and update according to returned status and result contained in reply?
+						if (reply == null || reply.startsWith("Error")) {
+							// Restore last turret state
+							pitch = lastPitch;
+							yaw = lastYaw;
+						}
+						else {
+							// Update turret state and views
+							lastPitch = pitch;
+							lastYaw = yaw;
+							runOnUiThread(new Runnable() {
+								public void run() {
+									updateTurretViews();
+								}
+							});
+						}
+					}
+				}
+			);
 		}
 	}
 
@@ -448,16 +485,19 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 					if (reply == null || reply.startsWith("Error")) {
 						runOnUiThread(new Runnable() {
 							public void run() {
-								laser = lastLaser; // restore last laser state
+								// Restore last laser state and toggle button
+								laser = lastLaser;
 								btnLaser.setChecked(laser == 1);
 							}
 						});
 					}
 					else {
+						// Update laser state
 						lastLaser = laser;
 					}
 				}
-			});
+			}
+		);
 	}
 
 	private void doSpin(final boolean block) {
@@ -479,16 +519,19 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 					if (reply == null || reply.startsWith("Error")) {
 						runOnUiThread(new Runnable() {
 							public void run() {
-								spin = lastSpin; // restore last spin state
+								// Restore last spin state and toggle button
+								spin = lastSpin;
 								btnSpin.setChecked(spin == 1);
 							}
 						});
 					}
 					else {
+						// Update spin state
 						lastSpin = spin;
 					}
 				}
-			});
+			}
+		);
 	}
 
 	private void doFire(final boolean block) {
@@ -538,24 +581,18 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		String topic = messageParts[0].trim();
 		String data = messageParts[1].trim();
 		try {
-			// TODO Handle drive updates (forward, strafe, turn)
-			// TODO Combine turret updates (pitch, yaw) into one
-			// TODO Handle IR array updates [topic.startsWith("ir")]
-			if (topic.equals("turret_pitch")) {
-				final float realPitch = Float.parseFloat(data);
+			// Handle IR array updates
+			if (topic.startsWith("ir")) {
+				Log.d(TAG, "onMessage(): IR update:- topic: " + topic + ", data: " + data);
+				// TODO parse IR array values from message and update a representative view
+				/*
+				JsonReader myReader = new JsonReader(new StringReader(data));
 				runOnUiThread(new Runnable() {
 					public void run() {
-						txtPitch.setText(String.format("%7.2f", realPitch)); //updateTurretViews();
+						updateIRViews();
 					};
 				});
-			}
-			else if (topic.equals("turret_yaw")) {
-				final float realYaw = Float.parseFloat(data);
-				runOnUiThread(new Runnable() {
-					public void run() {
-						txtYaw.setText(String.format("%7.2f", realYaw)); //updateTurretViews();
-					};
-				});
+				*/
 			}
 		}
 		catch (NumberFormatException e) {
