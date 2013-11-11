@@ -1,6 +1,5 @@
 package edu.ncsu.ieee.botcontrol;
 
-import java.io.StringReader;
 import java.util.regex.Pattern;
 
 import android.app.Activity;
@@ -8,7 +7,6 @@ import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.JsonReader;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -388,11 +386,11 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 				// NOTE Hopefully the string literals get compiled into one!
 				String.format(
 					"{" +
-						"cmd: fwd_strafe_turn, " +
-						"opts: {" +
-							"fwd: %.2f, " +
-							"strafe: %.2f, " +
-							"turn: %.2f" +
+						"\"cmd\": \"fwd_strafe_turn\", " +
+						"\"opts\": {" +
+							"\"fwd\": %.2f, " +
+							"\"strafe\": %.2f, " +
+							"\"turn\": %.2f" +
 						"}" +
 					"}",
 					forward,
@@ -432,10 +430,10 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			sendCommand(
 				String.format(
 					"{" +
-						"cmd: aim, " +
-						"opts: {" +
-							"pitch: %.2f, " +
-							"yaw: %.2f" +
+						"\"cmd\": \"aim\", " +
+						"\"opts\": {" +
+							"\"pitch\": %.2f, " +
+							"\"yaw\": %.2f" +
 						"}" +
 					"}",
 					pitch,
@@ -471,9 +469,9 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		sendCommand(
 			String.format(
 				"{" +
-					"cmd: laser, " +
-					"opts: {" +
-						"state: %d" +
+					"\"cmd\": \"laser\", " +
+					"\"opts\": {" +
+						"\"state\": %d" +
 					"}" +
 				"}",
 				laser),
@@ -505,9 +503,9 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		sendCommand(
 			String.format(
 				"{" +
-					"cmd: spin, " +
-					"opts: {" +
-						"state: %d" +
+					"\"cmd\": \"spin\", " +
+					"\"opts\": {" +
+						"\"state\": %d" +
 					"}" +
 				"}",
 				spin),
@@ -536,12 +534,12 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 
 	private void doFire(final boolean block) {
 		// Generate and send fire command
-		sendCommand("{cmd: fire, opts: {}}", block);
+		sendCommand("{\"cmd\": \"fire\", \"opts\": {}}", block);
 	}
 
 	private void doKillServer(final boolean block) {
 		// Generate and send kill command to stop server
-		sendCommand("{cmd: die, opts: {}}", block);
+		sendCommand("{\"cmd\": \"die\", \"opts\": {}}", block);
 	}
 
 	private void sendCommand(final String cmdStr, final boolean block) {
