@@ -2,6 +2,9 @@ package edu.ncsu.ieee.botcontrol;
 
 import java.util.regex.Pattern;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -26,7 +29,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	public static class ControlRange {
 		public float min, zero_min, zero, zero_max, max;
 		public float half_range, offset;
-		
+
 		/** Initialize control range members, compute some useful derived values. */
 		ControlRange(float min, float zero_min, float zero, float zero_max, float max) {
 			// NOTE min < zero_min <= zero <= zero_max < max
@@ -35,47 +38,47 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			this.zero = zero;
 			this.zero_max = zero_max;
 			this.max = max;
-			
+
 			this.half_range = (this.max - this.min) / 2;
 			this.offset = (this.min + this.max) / 2;
 		}
-		
+
 		/** Convert a normalized input value in [-1, 1] to a range-limited control value. */
 		public float fromNormalizedInput(float value) {
 			return applyLimits(offset + half_range * value);
 		}
-		
+
 		/** Convert a range-limited control value to a normalized input value in [-1, 1]. */
 		public float toNormalizedInput(float value) {
 			return (value - offset) / half_range;
 		}
-		
+
 		/** Apply range limits to control value. */
 		public float applyLimits(float value) {
 			return
-				(value < min
-					? min
-					: (value < zero_min
-						? value
-						: (value <= zero_max
-							? zero
-							: (value <= max
-								? value
-								: max
-							)
-						)
-					)
-				);
+					(value < min
+							? min
+									: (value < zero_min
+											? value
+													: (value <= zero_max
+													? zero
+															: (value <= max
+															? value
+																	: max
+																	)
+															)
+											)
+							);
 		}
 	}
-	
+
 	// Drive variables and ranges (TODO Check turn range)
 	private static final ControlRange forwardRange = new ControlRange(-100.f, -25.f, 0.f, 25.f, 100.f);
 	private float forward = forwardRange.zero;
-	
+
 	private static final ControlRange strafeRange = new ControlRange(-100.f, -25.f, 0.f, 25.f, 100.f);
 	private float strafe = strafeRange.zero;
-	
+
 	private static final ControlRange turnRange = new ControlRange(-100.f, -25.f, 0.f, 25.f, 100.f);
 	private float turn = turnRange.zero;
 	// TODO Turning not implemented yet; turn is always 0
@@ -83,23 +86,34 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private float lastForward = forward;
 	private float lastStrafe = strafe;
 	private float lastTurn = turn;
-	
+
+	private JSONObject driveCmdObj = new JSONObject(); // cached JSON objects for frequent use
+
 	// Turret variables and ranges (TODO Check pitch and yaw ranges)
 	private static final ControlRange pitchRange = new ControlRange(60.f, 90.f, 90.f, 90.f, 120.f);
 	private float pitch = pitchRange.zero;
-	
+
 	private static final ControlRange yawRange = new ControlRange(10.f, 90.f, 90.f, 90.f, 170.f);
 	private float yaw = yawRange.zero;
-	
+
 	private float lastPitch = pitch;
 	private float lastYaw = yaw;
-	
+
+	private JSONObject turretCmdObj;
+
 	// Gun variables
 	private int laser = 0;
 	private int lastLaser = laser;
 	private int spin = 0;
 	private int lastSpin = spin;
-	
+
+	private JSONObject laserCmdObj;
+	private JSONObject spinCmdObj;
+	private JSONObject fireCmdObj;
+
+	// Other control variables
+	private JSONObject exitCmdObj;
+
 	// Topics of streaming messages to subscribe to
 	// TODO Enable topics: "drive" (forward, strafe, turn), "turret" (pitch, yaw), "ir" (front, back, left, right)
 	private String[] subscriptionTopics = { "turret_pitch", "turret_yaw", "ir" };
@@ -126,7 +140,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		
+
 		// Setup view and obtain references to view elements
 		setContentView(R.layout.activity_main);
 		driveJoystick = (TouchJoystick) findViewById(R.id.driveJoystick);
@@ -138,7 +152,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		btnLaser = (ToggleButton) findViewById(R.id.btnLaser);
 		btnSpin = (ToggleButton) findViewById(R.id.btnSpin);
 		btnFire = (Button) findViewById(R.id.btnFire);
-		
+
 		// Initialize variables
 		lastForward = forward = forwardRange.zero;
 		lastStrafe = strafe = strafeRange.zero;
@@ -147,7 +161,15 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		lastYaw = yaw = yawRange.zero;
 		lastLaser = laser = 0;
 		lastSpin = spin = 0;
-		
+
+		// Initialize JSON objects that will be used frequently to make call requests
+		driveCmdObj = makeCallReq("driver", "move_forward_strafe", new String[] { "forward", "strafe" }, new Object[] { forward, strafe });
+		turretCmdObj = makeCallReq("gunner", "aim_turret", new String[] { "yaw", "pitch" }, new Object[] { yaw, pitch });
+		laserCmdObj = makeCallReq("gun", "set_laser", new String[] { "state" }, new Object[] { laser });
+		spinCmdObj = makeCallReq("gun", "set_spin", new String[] { "state" }, new Object[] { spin });
+		fireCmdObj = makeCallReq("gun", "fire", null, null);
+		exitCmdObj = makeExitReq();
+
 		// Configure view elements
 		driveJoystick.setJoystickListener(this);
 		turretJoystick.setJoystickListener(this);
@@ -205,19 +227,19 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			Intent zmqTestIntent = new Intent(this, ZMQTest.class);
 			startActivity(zmqTestIntent);
 			return true;
-		
+
 		case R.id.action_serverparams:
 			Log.d(TAG, "onOptionsItemSelected(): Getting new server params...");
 			// Build a dialog
 			final AlertDialog.Builder serverParamsDialog = new AlertDialog.Builder(BotControl.this);
 			serverParamsDialog.setTitle("Connect to server");
 			serverParamsDialog.setMessage("IP address:");
-			
+
 			// Set an EditText view to get user input 
 			final EditText txtServerHost = new EditText(BotControl.this);
 			txtServerHost.setText(serverHost);
 			serverParamsDialog.setView(txtServerHost);
-			
+
 			// Set button actions
 			serverParamsDialog.setPositiveButton("Connect", new DialogInterface.OnClickListener() {
 				public void onClick(DialogInterface dialog, int whichButton) {
@@ -240,22 +262,22 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 					dialog.cancel();
 				}
 			});
-			
+
 			// Show dialog
 			serverParamsDialog.show();
-			
+
 			// TODO Create ServerParams activity instead of dialog
 			//Intent serverParamsIntent = new Intent(this, ServerParams.class);
 			//startActivity(serverParamsIntent);
-			
+
 			return true;
-		
+
 		case R.id.action_killserver:
 			// Build a confirmation dialog
 			final AlertDialog.Builder killServerDialog = new AlertDialog.Builder(BotControl.this);
 			killServerDialog.setTitle("Kill server");
 			killServerDialog.setMessage("Are you sure you want to kill the server instance?");
-			
+
 			// Set button actions
 			killServerDialog.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
 				public void onClick(DialogInterface dialog, int whichButton) {
@@ -269,11 +291,11 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 					dialog.cancel();
 				}
 			});
-			
+
 			// Show dialog
 			killServerDialog.show();
 			return true;
-		
+
 		case R.id.action_settings:
 			Log.w(TAG, "onOptionsItemSelected(): Settings not implemented");
 			return true;
@@ -304,7 +326,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			clientThread = null;
 		}
 	}
-	
+
 	private void startSubscriber() {
 		stopSubscriber();
 		Log.d(TAG, "startSubscriber(): Starting subscriber thread...");
@@ -313,7 +335,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		subscriberThread.setListener(this);
 		subscriberThread.start();
 	}
-	
+
 	private void stopSubscriber() {
 		if (subscriberThread != null) {
 			Log.d(TAG, "stopSubscriber(): Stopping subscriber thread...");
@@ -331,19 +353,19 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 				driveJoystick.updateKnob(x, y);
 				// NOTE Don't produce movement command here, only on ACTION_MOVE, in case this is just a tap
 				return true;
-			
+
 			case MotionEvent.ACTION_MOVE:
 				//Log.d(TAG, "onJoystickEvent(): [drive/ACTION_MOVE] @ (" + x + ", " + y + ")");
 				driveJoystick.updateKnob(x, y);
-				
+
 				// Compute control inputs
 				forward = forwardRange.fromNormalizedInput(-driveJoystick.knobYNorm); // NOTE Y-flip
 				strafe  = strafeRange.fromNormalizedInput(driveJoystick.knobXNorm);
 				//Log.d(TAG, "onJoystickEvent(): [drive/ACTION_MOVE] forward = " + forward + ", strafe = " + strafe + ", turn = " + turn);
-				
+
 				doDrive(false); // ok to drop
 				return true;
-			
+
 			case MotionEvent.ACTION_UP:
 				//Log.d(TAG, "onJoystickEvent(): [drive/ACTION_UP] @ (" + x + ", " + y + ")");
 				forward = forwardRange.zero;
@@ -359,18 +381,18 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			case MotionEvent.ACTION_DOWN:
 				turretJoystick.updateKnob(x, y);
 				return true;
-			
+
 			case MotionEvent.ACTION_MOVE:
 				turretJoystick.updateKnob(x, y);
-				
+
 				// Compute control inputs
 				pitch = pitchRange.fromNormalizedInput(turretJoystick.knobYNorm);
 				yaw = yawRange.fromNormalizedInput(turretJoystick.knobXNorm);
 				//Log.d(TAG, "onJoystickEvent(): [turret/ACTION_MOVE] pitch = " + pitch + ", yaw = " + yaw);
-				
+
 				doTurret(false); // ok to drop
 				return true;
-			
+
 			case MotionEvent.ACTION_UP:
 				// NOP
 				return true;
@@ -382,173 +404,145 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private void doDrive(final boolean block) {
 		// Generate and send drive command, if different from last
 		if (forward != lastForward || strafe != lastStrafe || turn != lastTurn) {
+			setCallReqParam(driveCmdObj, "forward", forward);
+			setCallReqParam(driveCmdObj, "strafe", strafe);
+			//setCallReqParam(driveCmdObj, "turn", turn); // TODO turn currently not used
+
 			sendCommand(
-				// NOTE Hopefully the string literals get compiled into one!
-				String.format(
-					"{" +
-						"\"cmd\": \"fwd_strafe_turn\", " +
-						"\"opts\": {" +
-							"\"fwd\": %.2f, " +
-							"\"strafe\": %.2f, " +
-							"\"turn\": %.2f" +
-						"}" +
-					"}",
-					forward,
-					strafe,
-					turn),
-				block,
-				new CommandReplyCallback() {
-					@Override
-					public void onReply(final String reply) {
-						// TODO Parse JSON and update according to returned status and result contained in reply?
-						if (reply == null || reply.startsWith("Error")) {
-							// Restore last drive state
-							forward = lastForward;
-							strafe = lastStrafe;
-							turn = lastTurn;
-						}
-						else {
-							// Update drive state and views
-							lastForward = forward;
-							lastStrafe = strafe;
-							lastTurn = turn;
-							runOnUiThread(new Runnable() {
-								public void run() {
-									updateDriveViews();
-								}
-							});
+					// NOTE Hopefully the string literals get compiled into one!
+					driveCmdObj,
+					block,
+					new CommandReplyCallback() {
+						@Override
+						public void onReply(final String reply) {
+							// Parse JSON reply and update if valid response (TODO and result contained in reply?)
+							if (reply != null && parseCallReply(reply) != null) {
+								// Update drive state and views
+								lastForward = forward;
+								lastStrafe = strafe;
+								lastTurn = turn;
+								runOnUiThread(new Runnable() {
+									public void run() {
+										updateDriveViews();
+									}
+								});
+							}
+							else {
+								// Restore last drive state
+								forward = lastForward;
+								strafe = lastStrafe;
+								turn = lastTurn;
+							}
 						}
 					}
-				}
-			);
+					);
 		}
 	}
 
 	private void doTurret(final boolean block) {
 		// Generate and send turret command, if different from last
-		if (pitch != lastPitch || yaw != lastYaw) {
+		if ( yaw != lastYaw || pitch != lastPitch) {
+			setCallReqParam(turretCmdObj, "yaw", yaw);
+			setCallReqParam(turretCmdObj, "pitch", pitch);
+
 			sendCommand(
-				String.format(
-					"{" +
-						"\"cmd\": \"aim\", " +
-						"\"opts\": {" +
-							"\"pitch\": %.2f, " +
-							"\"yaw\": %.2f" +
-						"}" +
-					"}",
-					pitch,
-					yaw),
-				block,
-				new CommandReplyCallback() {
-					@Override
-					public void onReply(final String reply) {
-						// TODO Parse JSON and update according to returned status and result contained in reply?
-						if (reply == null || reply.startsWith("Error")) {
-							// Restore last turret state
-							pitch = lastPitch;
-							yaw = lastYaw;
-						}
-						else {
-							// Update turret state and views
-							lastPitch = pitch;
-							lastYaw = yaw;
-							runOnUiThread(new Runnable() {
-								public void run() {
-									updateTurretViews();
-								}
-							});
+					turretCmdObj,
+					block,
+					new CommandReplyCallback() {
+						@Override
+						public void onReply(final String reply) {
+							// Parse JSON reply and update if valid response (TODO and result contained in reply?)
+							if (reply != null && parseCallReply(reply) != null) {
+								// Update turret state and views
+								lastPitch = pitch;
+								lastYaw = yaw;
+								runOnUiThread(new Runnable() {
+									public void run() {
+										updateTurretViews();
+									}
+								});
+							}
+							else {
+								// Restore last turret state
+								pitch = lastPitch;
+								yaw = lastYaw;
+							}
 						}
 					}
-				}
-			);
+					);
 		}
 	}
 
 	private void doLaser(final boolean block) {
 		// Generate and send laser ON/OFF command
+		setCallReqParam(laserCmdObj, "state", laser);
 		sendCommand(
-			String.format(
-				"{" +
-					"\"cmd\": \"laser\", " +
-					"\"opts\": {" +
-						"\"state\": %d" +
-					"}" +
-				"}",
-				laser),
-			block,
-			new CommandReplyCallback() {
-				@Override
-				public void onReply(final String reply) {
-					// TODO Parse JSON and update according to returned status and result contained in reply?
-					if (reply == null || reply.startsWith("Error")) {
-						runOnUiThread(new Runnable() {
-							public void run() {
-								// Restore last laser state and toggle button
-								laser = lastLaser;
-								btnLaser.setChecked(laser == 1);
-							}
-						});
-					}
-					else {
-						// Update laser state
-						lastLaser = laser;
+				laserCmdObj,
+				block,
+				new CommandReplyCallback() {
+					@Override
+					public void onReply(final String reply) {
+						// Parse JSON reply and update if valid response (TODO and result contained in reply?)
+						if (reply != null && parseCallReply(reply) != null) {
+							// Update laser state
+							lastLaser = laser;
+						}
+						else {
+							runOnUiThread(new Runnable() {
+								public void run() {
+									// Restore last laser state and toggle button
+									laser = lastLaser;
+									btnLaser.setChecked(laser == 1);
+								}
+							});
+						}
 					}
 				}
-			}
-		);
+				);
 	}
 
 	private void doSpin(final boolean block) {
 		// Generate and send gun motor spin ON/OFF command
+		setCallReqParam(spinCmdObj, "state", spin);
 		sendCommand(
-			String.format(
-				"{" +
-					"\"cmd\": \"spin\", " +
-					"\"opts\": {" +
-						"\"state\": %d" +
-					"}" +
-				"}",
-				spin),
-			block,
-			new CommandReplyCallback() {
-				@Override
-				public void onReply(final String reply) {
-					// TODO Parse JSON and update according to returned status and result contained in reply?
-					if (reply == null || reply.startsWith("Error")) {
-						runOnUiThread(new Runnable() {
-							public void run() {
-								// Restore last spin state and toggle button
-								spin = lastSpin;
-								btnSpin.setChecked(spin == 1);
-							}
-						});
-					}
-					else {
-						// Update spin state
-						lastSpin = spin;
+				spinCmdObj,
+				block,
+				new CommandReplyCallback() {
+					@Override
+					public void onReply(final String reply) {
+						// Parse JSON reply and update if valid response (TODO and result contained in reply?)
+						if (reply != null && parseCallReply(reply) != null) {
+							// Update spin state
+							lastSpin = spin;
+						}
+						else {
+							runOnUiThread(new Runnable() {
+								public void run() {
+									// Restore last spin state and toggle button
+									spin = lastSpin;
+									btnSpin.setChecked(spin == 1);
+								}
+							});
+						}
 					}
 				}
-			}
-		);
+				);
 	}
 
 	private void doFire(final boolean block) {
 		// Generate and send fire command
-		sendCommand("{\"cmd\": \"fire\", \"opts\": {}}", block);
+		sendCommand(fireCmdObj, block, null);
 	}
 
 	private void doKillServer(final boolean block) {
 		// Generate and send kill command to stop server
-		sendCommand("{\"cmd\": \"die\", \"opts\": {}}", block);
+		sendCommand(exitCmdObj, block, null);
 	}
 
-	private void sendCommand(final String cmdStr, final boolean block) {
-		sendCommand(cmdStr, block, null);
-	}
-	
 	public interface CommandReplyCallback {
 		public void onReply(final String reply);
 	}
+
 	private void sendCommand(final String cmdStr, final boolean block, final CommandReplyCallback callback) {
 		//Log.d(TAG, "sendCommand(): forward = " + forward + ", strafe = " + strafe + ", turn = " + turn);
 		// Send this command (JSON string) to the control server,
@@ -567,7 +561,74 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			}).start();
 		}
 	}
-	
+
+	private void sendCommand(final JSONObject cmdObj, final boolean block, final CommandReplyCallback callback) {
+		try {
+			sendCommand(cmdObj.toString(), block, callback);
+		}
+		catch(NullPointerException e) {
+			Log.e(TAG, "Invalid command map: " + e);
+		}
+	}
+
+	private JSONObject makeCallReq(String obj_name, String method, String[] params, Object[] values) {
+		// NOTE It is easier to specify params and values in separate arrays than as a list of <key, value> pairs
+		try {
+			JSONObject cmdObj = (new JSONObject())
+					.put("type", "call_req")
+					.put("obj_name", obj_name)
+					.put("method", method)
+					.put("params", new JSONObject());
+			if (params != null && params.length > 0 && values != null && values.length == params.length) {
+				JSONObject paramsObj = cmdObj.getJSONObject("params");
+				for (int i = 0; i < params.length; i++) {
+					paramsObj.put(params[i], values[i]);
+				}
+			}
+			return cmdObj;
+		} catch (JSONException e) {
+			Log.e(TAG, "Error making JSON call_req object: " + e);
+			return null;
+		}
+	}
+
+	private JSONObject parseCallReply(String reply) {
+		try {
+			JSONObject replyObj = new JSONObject(reply);
+			if (replyObj.getString("type").equals("call_reply"))
+				return replyObj;
+			else {
+				Log.w(TAG, "Call reply type not favorable: " + replyObj.getString("type"));
+				return null;
+			}
+		} catch (JSONException e) {
+			Log.e(TAG, "Error parsing JSON reply: " + e);
+			return null;
+		} catch (NullPointerException e) {
+			Log.e(TAG, "Error parsing JSON reply: " + e);
+			return null;
+		}
+	}
+
+	private JSONObject makeExitReq() {
+		try {
+			JSONObject cmdObj = (new JSONObject()).put("type", "exit_req");
+			return cmdObj;
+		} catch (JSONException e) {
+			Log.e(TAG, "Error making JSON exit_req object: " + e);
+			return null;
+		}
+	}
+
+	private void setCallReqParam(JSONObject cmdObj, String param, Object value) {
+		try {
+			JSONObject paramsObj = cmdObj.getJSONObject("params");
+			paramsObj.put(param, value);
+		} catch (JSONException e) {
+			Log.e(TAG, "Error setting call_req param (silent error): " + e);
+		}
+	}
+
 	@Override
 	public void onMessage(String message) {
 		String messageParts[] = message.split("\\s", 2); // split message into 2 parts on first whitespace
@@ -575,7 +636,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			Log.w(TAG, "onMessage(): Ignoring invalid message: \"" + message + "\"");
 			return;
 		}
-		
+
 		String topic = messageParts[0].trim();
 		String data = messageParts[1].trim();
 		try {
@@ -590,19 +651,19 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 						updateIRViews();
 					};
 				});
-				*/
+				 */
 			}
 		}
 		catch (NumberFormatException e) {
 			Log.w(TAG, "onMessage(): [topic=" + topic + "] Ignoring invalid data: \"" + data + "\"");
 		}
 	}
-	
+
 	private void updateDriveViews() {
 		txtForward.setText(String.format("%7.2f", forward));
 		txtStrafe.setText(String.format("%7.2f", strafe));
 	}
-	
+
 	private void updateTurretViews() {
 		txtPitch.setText(String.format("%7.2f", pitch));
 		txtYaw.setText(String.format("%7.2f", yaw));
