@@ -164,6 +164,12 @@
             android:gravity="center_horizontal"
             android:orientation="vertical" >
 
+            <Button
+                android:id="@+id/btnPing"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Ping" />
+
             <ToggleButton
                 android:id="@+id/btnLaser"
                 android:layout_width="match_parent"

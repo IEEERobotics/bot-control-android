@@ -9,6 +9,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
@@ -19,6 +20,7 @@ import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.widget.ToggleButton;
 
 /** Touch-based bot control activity. */
@@ -112,7 +114,14 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private JSONObject fireCmdObj;
 
 	// Other control variables
+	private boolean pingOkay = false;
+	private JSONObject pingCmdObj;
 	private JSONObject exitCmdObj;
+	
+	// Misc. variables
+	int unknownColor = Color.rgb(80, 80, 80);
+	int okayColor = Color.rgb(80, 120, 80);
+	int errorColor = Color.rgb(120, 80, 80);
 
 	// Topics of streaming messages to subscribe to
 	// TODO Enable topics: "drive" (forward, strafe, turn), "turret" (pitch, yaw), "ir" (front, back, left, right)
@@ -133,6 +142,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private TextView txtStrafe = null;
 	private TextView txtPitch = null;
 	private TextView txtYaw = null;
+	private Button btnPing = null;
 	private ToggleButton btnLaser = null;
 	private ToggleButton btnSpin = null;
 	private Button btnFire = null;
@@ -149,6 +159,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		txtStrafe = (TextView) findViewById(R.id.txtStrafe);
 		txtPitch = (TextView) findViewById(R.id.txtPitch);
 		txtYaw = (TextView) findViewById(R.id.txtYaw);
+		btnPing = (Button) findViewById(R.id.btnPing);
 		btnLaser = (ToggleButton) findViewById(R.id.btnLaser);
 		btnSpin = (ToggleButton) findViewById(R.id.btnSpin);
 		btnFire = (Button) findViewById(R.id.btnFire);
@@ -165,6 +176,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		// Initialize JSON objects that will be used frequently to make call requests
 		driveCmdObj = makeCallReq("driver", "move_forward_strafe", new String[] { "forward", "strafe" }, new Object[] { forward, strafe });
 		turretCmdObj = makeCallReq("gunner", "aim_turret", new String[] { "yaw", "pitch" }, new Object[] { yaw, pitch });
+		pingCmdObj = makePingReq();
 		laserCmdObj = makeCallReq("gun", "set_laser", new String[] { "state" }, new Object[] { laser });
 		spinCmdObj = makeCallReq("gun", "set_spin", new String[] { "state" }, new Object[] { spin });
 		fireCmdObj = makeCallReq("gun", "fire", null, null);
@@ -177,6 +189,15 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		turretJoystick.updateKnob(yawRange.toNormalizedInput(yaw), pitchRange.toNormalizedInput(pitch));
 		updateDriveViews();
 		updateTurretViews();
+		btnPing.setBackgroundColor(unknownColor);
+		btnPing.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				pingOkay = false; // assume not okay, unless it is
+				btnPing.setBackgroundColor(errorColor);
+				doPing(true); // block till reply (on reply, show visual indication using button color)
+			}
+		});
 		btnLaser.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
@@ -401,6 +422,42 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		return false;
 	}
 
+	private void doPing(final boolean block) {
+		// Ping the control server, get response time in milliseconds
+		final long startTime = System.currentTimeMillis();
+		sendCommand(
+			pingCmdObj,
+			block,
+			new CommandReplyCallback() {
+				@Override
+				public void onReply(final String reply) {
+					// Parse JSON reply and update if valid response (TODO and result contained in reply?)
+					final long responseTime = (System.currentTimeMillis() - startTime);
+					if (reply == null)
+						return;
+					
+					try {
+						JSONObject replyObj = new JSONObject(reply);
+						if (replyObj == null || !replyObj.has("type") || !replyObj.getString("type").equals("ping_reply"))
+							return;
+						
+						// Update UI to show ping success and responseTime
+						runOnUiThread(new Runnable() {
+							public void run() {
+								// Update ping state
+								pingOkay = true;
+								btnPing.setBackgroundColor(okayColor);
+								Toast.makeText(BotControl.this, "Ping: " + responseTime + " ms", Toast.LENGTH_SHORT).show();
+							}
+						});
+					} catch (JSONException e) {
+						Log.e(TAG, "Error parsing JSON ping reply: " + e);
+					}
+				}
+			}
+		);
+	}
+	
 	private void doDrive(final boolean block) {
 		// Generate and send drive command, if different from last
 		if (forward != lastForward || strafe != lastStrafe || turn != lastTurn) {
@@ -409,33 +466,32 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			//setCallReqParam(driveCmdObj, "turn", turn); // TODO turn currently not used
 
 			sendCommand(
-					// NOTE Hopefully the string literals get compiled into one!
-					driveCmdObj,
-					block,
-					new CommandReplyCallback() {
-						@Override
-						public void onReply(final String reply) {
-							// Parse JSON reply and update if valid response (TODO and result contained in reply?)
-							if (reply != null && parseCallReply(reply) != null) {
-								// Update drive state and views
-								lastForward = forward;
-								lastStrafe = strafe;
-								lastTurn = turn;
-								runOnUiThread(new Runnable() {
-									public void run() {
-										updateDriveViews();
-									}
-								});
-							}
-							else {
-								// Restore last drive state
-								forward = lastForward;
-								strafe = lastStrafe;
-								turn = lastTurn;
-							}
+				driveCmdObj,
+				block,
+				new CommandReplyCallback() {
+					@Override
+					public void onReply(final String reply) {
+						// Parse JSON reply and update if valid response (TODO and result contained in reply?)
+						if (reply != null && parseCallReply(reply) != null) {
+							// Update drive state and views
+							lastForward = forward;
+							lastStrafe = strafe;
+							lastTurn = turn;
+							runOnUiThread(new Runnable() {
+								public void run() {
+									updateDriveViews();
+								}
+							});
+						}
+						else {
+							// Restore last drive state
+							forward = lastForward;
+							strafe = lastStrafe;
+							turn = lastTurn;
 						}
 					}
-					);
+				}
+			);
 		}
 	}
 
@@ -446,30 +502,30 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			setCallReqParam(turretCmdObj, "pitch", pitch);
 
 			sendCommand(
-					turretCmdObj,
-					block,
-					new CommandReplyCallback() {
-						@Override
-						public void onReply(final String reply) {
-							// Parse JSON reply and update if valid response (TODO and result contained in reply?)
-							if (reply != null && parseCallReply(reply) != null) {
-								// Update turret state and views
-								lastPitch = pitch;
-								lastYaw = yaw;
-								runOnUiThread(new Runnable() {
-									public void run() {
-										updateTurretViews();
-									}
-								});
-							}
-							else {
-								// Restore last turret state
-								pitch = lastPitch;
-								yaw = lastYaw;
-							}
+				turretCmdObj,
+				block,
+				new CommandReplyCallback() {
+					@Override
+					public void onReply(final String reply) {
+						// Parse JSON reply and update if valid response (TODO and result contained in reply?)
+						if (reply != null && parseCallReply(reply) != null) {
+							// Update turret state and views
+							lastPitch = pitch;
+							lastYaw = yaw;
+							runOnUiThread(new Runnable() {
+								public void run() {
+									updateTurretViews();
+								}
+							});
+						}
+						else {
+							// Restore last turret state
+							pitch = lastPitch;
+							yaw = lastYaw;
 						}
 					}
-					);
+				}
+			);
 		}
 	}
 
@@ -477,56 +533,56 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		// Generate and send laser ON/OFF command
 		setCallReqParam(laserCmdObj, "state", laser);
 		sendCommand(
-				laserCmdObj,
-				block,
-				new CommandReplyCallback() {
-					@Override
-					public void onReply(final String reply) {
-						// Parse JSON reply and update if valid response (TODO and result contained in reply?)
-						if (reply != null && parseCallReply(reply) != null) {
-							// Update laser state
-							lastLaser = laser;
-						}
-						else {
-							runOnUiThread(new Runnable() {
-								public void run() {
-									// Restore last laser state and toggle button
-									laser = lastLaser;
-									btnLaser.setChecked(laser == 1);
-								}
-							});
-						}
+			laserCmdObj,
+			block,
+			new CommandReplyCallback() {
+				@Override
+				public void onReply(final String reply) {
+					// Parse JSON reply and update if valid response (TODO and result contained in reply?)
+					if (reply != null && parseCallReply(reply) != null) {
+						// Update laser state
+						lastLaser = laser;
+					}
+					else {
+						runOnUiThread(new Runnable() {
+							public void run() {
+								// Restore last laser state and toggle button
+								laser = lastLaser;
+								btnLaser.setChecked(laser == 1);
+							}
+						});
 					}
 				}
-				);
+			}
+		);
 	}
 
 	private void doSpin(final boolean block) {
 		// Generate and send gun motor spin ON/OFF command
 		setCallReqParam(spinCmdObj, "state", spin);
 		sendCommand(
-				spinCmdObj,
-				block,
-				new CommandReplyCallback() {
-					@Override
-					public void onReply(final String reply) {
-						// Parse JSON reply and update if valid response (TODO and result contained in reply?)
-						if (reply != null && parseCallReply(reply) != null) {
-							// Update spin state
-							lastSpin = spin;
-						}
-						else {
-							runOnUiThread(new Runnable() {
-								public void run() {
-									// Restore last spin state and toggle button
-									spin = lastSpin;
-									btnSpin.setChecked(spin == 1);
-								}
-							});
-						}
+			spinCmdObj,
+			block,
+			new CommandReplyCallback() {
+				@Override
+				public void onReply(final String reply) {
+					// Parse JSON reply and update if valid response (TODO and result contained in reply?)
+					if (reply != null && parseCallReply(reply) != null) {
+						// Update spin state
+						lastSpin = spin;
+					}
+					else {
+						runOnUiThread(new Runnable() {
+							public void run() {
+								// Restore last spin state and toggle button
+								spin = lastSpin;
+								btnSpin.setChecked(spin == 1);
+							}
+						});
 					}
 				}
-				);
+			}
+		);
 	}
 
 	private void doFire(final boolean block) {
@@ -606,6 +662,16 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			return null;
 		} catch (NullPointerException e) {
 			Log.e(TAG, "Error parsing JSON reply: " + e);
+			return null;
+		}
+	}
+
+	private JSONObject makePingReq() {
+		try {
+			JSONObject cmdObj = (new JSONObject()).put("type", "ping_req");
+			return cmdObj;
+		} catch (JSONException e) {
+			Log.e(TAG, "Error making JSON ping_req object: " + e);
 			return null;
 		}
 	}
