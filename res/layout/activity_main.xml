@@ -194,4 +194,14 @@
 
     </RelativeLayout>
 
+    <TextView
+        android:id="@+id/txtConsole"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"
+        android:gravity="top|left"
+        android:maxLines="6"
+        android:minLines="6" />
+
 </RelativeLayout>

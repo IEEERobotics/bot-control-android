@@ -1,7 +1,9 @@
 package edu.ncsu.ieee.botcontrol;
 
+import java.util.Iterator;
 import java.util.regex.Pattern;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -116,12 +118,14 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	// Other control variables
 	private boolean pingOkay = false;
 	private JSONObject pingCmdObj;
+	private JSONObject irCmdObj;
 	private JSONObject exitCmdObj;
 	
 	// Misc. variables
 	int unknownColor = Color.rgb(80, 80, 80);
 	int okayColor = Color.rgb(80, 120, 80);
 	int errorColor = Color.rgb(120, 80, 80);
+	int maxConsoleLength = 200; // keep low to clear frequently
 
 	// Topics of streaming messages to subscribe to
 	// TODO Enable topics: "drive" (forward, strafe, turn), "turret" (pitch, yaw), "ir" (front, back, left, right)
@@ -134,8 +138,11 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private int pubServerPort = 60001;
 	private ZMQClientThread clientThread = null;
 	private ZMQSubscriberThread subscriberThread = null;
+	private Thread dataThread = null;
+	private long dataInterval = 500; // ms, time between reads
 
 	// View elements
+	private TextView txtConsole = null;
 	private TouchJoystick driveJoystick = null;
 	private TouchJoystick turretJoystick = null;
 	private TextView txtForward = null;
@@ -153,6 +160,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 
 		// Setup view and obtain references to view elements
 		setContentView(R.layout.activity_main);
+		txtConsole = (TextView) findViewById(R.id.txtConsole);
 		driveJoystick = (TouchJoystick) findViewById(R.id.driveJoystick);
 		turretJoystick = (TouchJoystick) findViewById(R.id.turretJoystick);
 		txtForward = (TextView) findViewById(R.id.txtForward);
@@ -180,6 +188,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		laserCmdObj = makeCallReq("gun", "set_laser", new String[] { "state" }, new Object[] { laser });
 		spinCmdObj = makeCallReq("gun", "set_spin", new String[] { "state" }, new Object[] { spin });
 		fireCmdObj = makeCallReq("gun", "fire", null, null);
+		irCmdObj = makeCallReq("ir_hub", "read_cached", new String[] { "max_staleness" }, new Object[] { dataInterval / 1000.f }); // dataInterval is in ms
 		exitCmdObj = makeExitReq();
 
 		// Configure view elements
@@ -224,12 +233,15 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	protected void onResume() {
 		super.onResume();
 		startClient();
-		startSubscriber();
+		//startSubscriber(); // NOTE subscriber disabled
+		startDataThread();
+		txtConsole.setText("[SYSTEM] Ready\n");
 	}
 
 	@Override
 	protected void onPause() {
-		stopSubscriber();
+		stopDataThread();
+		//stopSubscriber(); // NOTE subscriber disabled
 		stopClient();
 		super.onPause();
 	}
@@ -364,6 +376,36 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			subscriberThread = null;
 		}
 	}
+	
+	private void startDataThread() {
+		stopDataThread();
+		Log.d(TAG, "startDataThread(): Starting data read thread...");
+		dataThread = new Thread() {
+			public void run() {
+				if (clientThread != null) {
+					while (true) {
+						try {
+							doIRRead(false); // don't block, may cause continuous stream of failed attempts
+							// TODO Check if a lot of continuous reads have failed, then break out
+							sleep(dataInterval);
+						} catch (InterruptedException e) {
+							Log.d(TAG, "dataThread: Interrupted! Exiting data read thread...");
+							break;
+						}
+					}
+				}
+			}
+		};
+		dataThread.start();
+	}
+	
+	private void stopDataThread() {
+		if (dataThread != null) {
+			Log.d(TAG, "stopDataThread(): Stopping data read thread...");
+			dataThread.interrupt();
+			dataThread = null;
+		}
+	}
 
 	@Override
 	public boolean onJoystickEvent(TouchJoystick joystick, int action, float x, float y) {
@@ -424,6 +466,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 
 	private void doPing(final boolean block) {
 		// Ping the control server, get response time in milliseconds
+		txtConsole.append("[PING] Sending...\n"); // should be on UI thread
 		final long startTime = System.currentTimeMillis();
 		sendCommand(
 			pingCmdObj,
@@ -447,6 +490,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 								// Update ping state
 								pingOkay = true;
 								btnPing.setBackgroundColor(okayColor);
+								txtConsole.append("[PING] Received (" + responseTime + " ms).\n");
 								Toast.makeText(BotControl.this, "Ping: " + responseTime + " ms", Toast.LENGTH_SHORT).show();
 							}
 						});
@@ -588,6 +632,56 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private void doFire(final boolean block) {
 		// Generate and send fire command
 		sendCommand(fireCmdObj, block, null);
+	}
+	
+	private void doIRRead(final boolean block) {
+		// Read IR sensor data
+		sendCommand(
+			irCmdObj,
+			block,
+			new CommandReplyCallback() {
+				@Override
+				public void onReply(final String reply) {
+					// Parse JSON reply and update if valid response (TODO and result contained in reply?)
+					if (reply == null)
+						return;
+					
+					try {
+						JSONObject replyObj = parseCallReply(reply);
+						if (replyObj == null || !replyObj.has("call_return"))
+							return;
+						
+						// Extract IR data and update UI
+						JSONObject dataObj = replyObj.getJSONObject("call_return");
+						final double time = dataObj.getDouble("time");
+						final boolean fresh = dataObj.getBoolean("fresh");
+						final JSONObject readings = dataObj.getJSONObject("readings");
+						//Log.d(TAG, "[IR] time: " + time + ", fresh: " + fresh + ", len(readings): " + readings.length());
+						runOnUiThread(new Runnable() {
+							public void run() {
+								// Update UI
+								if (txtConsole.length() > maxConsoleLength)
+									txtConsole.setText(""); // clear if full
+								txtConsole.append("[IR] time: " + time + ", fresh: " + fresh + ", len(readings): " + readings.length() + "\n");
+								Iterator<?> names = readings.keys();
+								while (names.hasNext()) {
+									String name = (String) names.next();
+									try {
+										JSONArray reading = readings.getJSONArray(name);
+										txtConsole.append("[IR] " + name +": " + reading.toString() + "\n");
+									} catch (JSONException e) {
+										// Something went wrong!
+									}
+								}
+								
+							}
+						});
+					} catch (JSONException e) {
+						Log.e(TAG, "Error parsing JSON IR reply: " + e);
+					}
+				}
+			}
+		);
 	}
 
 	private void doKillServer(final boolean block) {
