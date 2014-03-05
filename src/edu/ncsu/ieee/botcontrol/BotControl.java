@@ -11,6 +11,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -133,7 +134,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 
 	// Communication
 	private String serverProtocol = "tcp";
-	private String serverHost = "10.0.2.2"; // NOTE When running on an emulator, 10.0.2.2 refers to the host computer
+	private String serverHost = null; // leave null to read from resource file (if not in preferences), or override here: e.g. 10.2.1.1 for the bot, 10.0.2.2 from an emulator refers to the host computer
 	private int serverPort = 60000;
 	private int pubServerPort = 60001;
 	private ZMQClientThread clientThread = null;
@@ -157,6 +158,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		loadPreferences();
 
 		// Setup view and obtain references to view elements
 		setContentView(R.layout.activity_main);
@@ -245,7 +247,13 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		stopClient();
 		super.onPause();
 	}
-
+	
+	@Override
+	protected void onStop() {
+		savePreferences();
+		super.onStop();
+	}
+	
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		// Inflate the menu; this adds items to the action bar if it is present.
@@ -336,11 +344,36 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		return super.onOptionsItemSelected(item);
 	}
 
+	private void savePreferences() {
+		// Save current preferences
+		SharedPreferences prefs = getSharedPreferences(TAG, MODE_PRIVATE); // get preferences
+		SharedPreferences.Editor editor = prefs.edit(); // get an editor on those preferences
+		
+		// * Server host
+		editor.putString("server_host", serverHost); // 
+		
+		editor.commit(); // commit preference edits
+		Log.d(TAG, "Preferences saved");
+	}
+	
+	private void loadPreferences() {
+		// Load preferences, with appropriate defaults
+		SharedPreferences prefs = getSharedPreferences(TAG, MODE_PRIVATE);
+		
+		// * Server host
+		serverHost = prefs.getString("server_host", serverHost); // fetch from prefs, default to any value already initialized
+		if (serverHost == null)
+			serverHost = getResources().getString(R.string.server_host); // if not in prefs and no default, get from resources
+		
+		Log.d(TAG, "Preferences loaded");
+	}
+	
 	private void setServerHost(String serverHost) {
 		Log.d(TAG, "setServerHost(): Resetting client threads...");
 		stopSubscriber();
 		stopClient();
 		this.serverHost = serverHost;
+		savePreferences(); // make new server host persist
 		startClient();
 		startSubscriber();
 	}
