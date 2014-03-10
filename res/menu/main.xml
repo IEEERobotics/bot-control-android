@@ -1,14 +1,28 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android" >
 
     <item
+        android:id="@+id/action_toggle_ir"
+        android:title="@string/action_toggle_ir"
+        android:icon="@android:drawable/ic_menu_share"
+        android:showAsAction="always">
+    </item>
+    <item
+        android:id="@+id/action_estop"
+        android:title="@string/action_estop"
+        android:icon="@android:drawable/ic_menu_info_details"
+        android:showAsAction="never">
+    </item>
+    <item
         android:id="@+id/action_serverparams"
         android:title="@string/action_serverparams"
-        android:icon="@android:drawable/ic_menu_upload">
+        android:icon="@android:drawable/ic_menu_upload"
+        android:showAsAction="never">
     </item>
     <item
         android:id="@+id/action_killserver"
         android:title="@string/action_killserver"
-        android:icon="@android:drawable/ic_menu_close_clear_cancel">
+        android:icon="@android:drawable/ic_menu_close_clear_cancel"
+        android:showAsAction="never">
     </item>
     <item
         android:id="@+id/action_zmqtest"

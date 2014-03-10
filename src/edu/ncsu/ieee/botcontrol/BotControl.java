@@ -120,6 +120,10 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private boolean pingOkay = false;
 	private JSONObject pingCmdObj;
 	private JSONObject irCmdObj;
+	private JSONObject irBinaryCmdObj;
+	private boolean irReadBinary = false; // should we read binary or full-range values
+	private int irBinaryThresh = 100; // TODO make this editable
+	private JSONObject estopCmdObj;
 	private JSONObject exitCmdObj;
 	
 	// Misc. variables
@@ -191,6 +195,8 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		spinCmdObj = makeCallReq("gun", "set_spin", new String[] { "state" }, new Object[] { spin });
 		fireCmdObj = makeCallReq("gun", "fire", null, null);
 		irCmdObj = makeCallReq("ir_hub", "read_cached", new String[] { "max_staleness" }, new Object[] { dataInterval / 1000.f }); // dataInterval is in ms
+		irBinaryCmdObj = makeCallReq("ir_hub", "read_binary", new String[] { "thresh" }, new Object[] { irBinaryThresh });
+		estopCmdObj = makeCallReq("driver", "move_forward_strafe", new String[] { "forward", "strafe" }, new Object[] { forwardRange.zero, strafeRange.zero });
 		exitCmdObj = makeExitReq();
 
 		// Configure view elements
@@ -312,7 +318,21 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			//startActivity(serverParamsIntent);
 
 			return true;
-
+		
+		case R.id.action_toggle_ir:
+			irReadBinary = !irReadBinary;
+			Log.d(TAG, "onOptionsItemSelected(): IR toggled to " + (irReadBinary ? "binary" : "value") + " mode");
+			txtConsole.append("[IR] Mode = " + (irReadBinary ? "binary" : "value") + "\n");
+			break;
+		
+		case R.id.action_estop:
+			Log.d(TAG, "onOptionsItemSelected(): Sending E-Stop...");
+			txtConsole.append("[E-Stop]\n");
+			doEStop(true);
+			forward = forwardRange.zero;
+			strafe = strafeRange.zero;
+			return true;
+		
 		case R.id.action_killserver:
 			// Build a confirmation dialog
 			final AlertDialog.Builder killServerDialog = new AlertDialog.Builder(BotControl.this);
@@ -670,7 +690,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private void doIRRead(final boolean block) {
 		// Read IR sensor data
 		sendCommand(
-			irCmdObj,
+			(irReadBinary ? irBinaryCmdObj : irCmdObj),
 			block,
 			new CommandReplyCallback() {
 				@Override
@@ -686,9 +706,9 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 						
 						// Extract IR data and update UI
 						JSONObject dataObj = replyObj.getJSONObject("call_return");
-						final double time = dataObj.getDouble("time");
-						final boolean fresh = dataObj.getBoolean("fresh");
-						final JSONObject readings = dataObj.getJSONObject("readings");
+						final double time = (irReadBinary ? -1.0 : dataObj.getDouble("time"));
+						final boolean fresh = (irReadBinary ? true : dataObj.getBoolean("fresh"));
+						final JSONObject readings = (irReadBinary ? dataObj : dataObj.getJSONObject("readings"));
 						//Log.d(TAG, "[IR] time: " + time + ", fresh: " + fresh + ", len(readings): " + readings.length());
 						runOnUiThread(new Runnable() {
 							public void run() {
@@ -717,6 +737,11 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		);
 	}
 
+	private void doEStop(final boolean block) {
+		// Generate and send E-Stop command to stop the bot
+		sendCommand(estopCmdObj, block, null);
+	}
+	
 	private void doKillServer(final boolean block) {
 		// Generate and send kill command to stop server
 		sendCommand(exitCmdObj, block, null);
