@@ -113,7 +113,8 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private int lastSpin = spin;
 
 	private JSONObject laserCmdObj;
-	private JSONObject spinCmdObj;
+	private JSONObject spinUpCmdObj;
+	private JSONObject spinDownCmdObj;
 	private JSONObject fireCmdObj;
 
 	// Other control variables
@@ -189,10 +190,11 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 
 		// Initialize JSON objects that will be used frequently to make call requests
 		driveCmdObj = makeCallReq("driver", "move_forward_strafe", new String[] { "forward", "strafe" }, new Object[] { forward, strafe });
-		turretCmdObj = makeCallReq("gunner", "aim_turret", new String[] { "yaw", "pitch" }, new Object[] { yaw, pitch });
+		turretCmdObj = makeCallReq("turret", "aim", new String[] { "yaw", "pitch" }, new Object[] { yaw, pitch });
 		pingCmdObj = makePingReq();
 		laserCmdObj = makeCallReq("gun", "set_laser", new String[] { "state" }, new Object[] { laser });
-		spinCmdObj = makeCallReq("gun", "set_spin", new String[] { "state" }, new Object[] { spin });
+		spinUpCmdObj = makeCallReq("gun", "spin_up", null, null);
+		spinDownCmdObj = makeCallReq("gun", "stop", null, null);
 		fireCmdObj = makeCallReq("gun", "fire", null, null);
 		irCmdObj = makeCallReq("ir_hub", "read_cached", new String[] { "max_staleness" }, new Object[] { dataInterval / 1000.f }); // dataInterval is in ms
 		irBinaryCmdObj = makeCallReq("ir_hub", "read_binary", new String[] { "thresh" }, new Object[] { irBinaryThresh });
@@ -656,9 +658,8 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 
 	private void doSpin(final boolean block) {
 		// Generate and send gun motor spin ON/OFF command
-		setCallReqParam(spinCmdObj, "state", spin);
 		sendCommand(
-			spinCmdObj,
+			(spin == 1 ? spinUpCmdObj : spinDownCmdObj),
 			block,
 			new CommandReplyCallback() {
 				@Override
