@@ -1,5 +1,5 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res/edu.ncsu.ieee.botcontrol"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -90,73 +90,6 @@
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/turretGroup"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_marginRight="50dp"
-            android:orientation="vertical" >
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal" >
-
-                <TextView
-                    android:id="@+id/lblPitch"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1.0"
-                    android:gravity="right"
-                    android:labelFor="@+id/txtPitch"
-                    android:text="Pitch: " />
-
-                <TextView
-                    android:id="@+id/txtPitch"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1.0"
-                    android:text="90.0"
-                    android:typeface="monospace" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal" >
-
-                <TextView
-                    android:id="@+id/lblYaw"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1.0"
-                    android:gravity="right"
-                    android:labelFor="@+id/txtYaw"
-                    android:text="Yaw: " />
-
-                <TextView
-                    android:id="@+id/txtYaw"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1.0"
-                    android:text="90.0"
-                    android:typeface="monospace" />
-            </LinearLayout>
-
-            <edu.ncsu.ieee.botcontrol.TouchJoystick
-                android:id="@+id/turretJoystick"
-                android:layout_width="200dp"
-                android:layout_height="200dp"
-                android:layout_marginTop="25dp"
-                android:padding="12dp"
-                app:backgroundDrawable="@drawable/rect"
-                app:messageColor="@android:color/secondary_text_dark"
-                app:messageFontSize="16sp"
-                app:messageText="Turret"
-                app:shape="square" />
-        </LinearLayout>
-
-        <LinearLayout
             android:id="@+id/buttonGroup"
             android:layout_width="90dp"
             android:layout_height="wrap_content"
@@ -169,26 +102,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Ping" />
-
-            <ToggleButton
-                android:id="@+id/btnLaser"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textOff="Laser OFF"
-                android:textOn="Laser ON" />
-
-            <ToggleButton
-                android:id="@+id/btnSpin"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textOff="Spin OFF"
-                android:textOn="Spin ON" />
-
-            <Button
-                android:id="@+id/btnFire"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Fire!" />
 
         </LinearLayout>
 

@@ -94,36 +94,9 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 
 	private JSONObject driveCmdObj = new JSONObject(); // cached JSON objects for frequent use
 
-	// Turret variables and ranges (TODO Check pitch and yaw ranges)
-	private static final ControlRange pitchRange = new ControlRange(60.f, 90.f, 90.f, 90.f, 120.f);
-	private float pitch = pitchRange.zero;
-
-	private static final ControlRange yawRange = new ControlRange(10.f, 90.f, 90.f, 90.f, 170.f);
-	private float yaw = yawRange.zero;
-
-	private float lastPitch = pitch;
-	private float lastYaw = yaw;
-
-	private JSONObject turretCmdObj;
-
-	// Gun variables
-	private int laser = 0;
-	private int lastLaser = laser;
-	private int spin = 0;
-	private int lastSpin = spin;
-
-	private JSONObject laserCmdObj;
-	private JSONObject spinUpCmdObj;
-	private JSONObject spinDownCmdObj;
-	private JSONObject fireCmdObj;
-
 	// Other control variables
 	private boolean pingOkay = false;
 	private JSONObject pingCmdObj;
-	private JSONObject irCmdObj;
-	private JSONObject irBinaryCmdObj;
-	private boolean irReadBinary = false; // should we read binary or full-range values
-	private int irBinaryThresh = 100; // TODO make this editable
 	private JSONObject estopCmdObj;
 	private JSONObject exitCmdObj;
 	
@@ -144,21 +117,13 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	private int pubServerPort = 60001;
 	private ZMQClientThread clientThread = null;
 	private ZMQSubscriberThread subscriberThread = null;
-	private Thread dataThread = null;
-	private long dataInterval = 500; // ms, time between reads
 
 	// View elements
 	private TextView txtConsole = null;
 	private TouchJoystick driveJoystick = null;
-	private TouchJoystick turretJoystick = null;
 	private TextView txtForward = null;
 	private TextView txtStrafe = null;
-	private TextView txtPitch = null;
-	private TextView txtYaw = null;
 	private Button btnPing = null;
-	private ToggleButton btnLaser = null;
-	private ToggleButton btnSpin = null;
-	private Button btnFire = null;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -169,45 +134,25 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		setContentView(R.layout.activity_main);
 		txtConsole = (TextView) findViewById(R.id.txtConsole);
 		driveJoystick = (TouchJoystick) findViewById(R.id.driveJoystick);
-		turretJoystick = (TouchJoystick) findViewById(R.id.turretJoystick);
 		txtForward = (TextView) findViewById(R.id.txtForward);
 		txtStrafe = (TextView) findViewById(R.id.txtStrafe);
-		txtPitch = (TextView) findViewById(R.id.txtPitch);
-		txtYaw = (TextView) findViewById(R.id.txtYaw);
 		btnPing = (Button) findViewById(R.id.btnPing);
-		btnLaser = (ToggleButton) findViewById(R.id.btnLaser);
-		btnSpin = (ToggleButton) findViewById(R.id.btnSpin);
-		btnFire = (Button) findViewById(R.id.btnFire);
 
 		// Initialize variables
 		lastForward = forward = forwardRange.zero;
 		lastStrafe = strafe = strafeRange.zero;
 		lastTurn = turn = turnRange.zero;
-		lastPitch = pitch = pitchRange.zero;
-		lastYaw = yaw = yawRange.zero;
-		lastLaser = laser = 0;
-		lastSpin = spin = 0;
 
 		// Initialize JSON objects that will be used frequently to make call requests
 		driveCmdObj = makeCallReq("driver", "move_forward_strafe", new String[] { "forward", "strafe" }, new Object[] { forward, strafe });
-		turretCmdObj = makeCallReq("turret", "aim", new String[] { "yaw", "pitch" }, new Object[] { yaw, pitch });
 		pingCmdObj = makePingReq();
-		laserCmdObj = makeCallReq("gun", "set_laser", new String[] { "state" }, new Object[] { laser });
-		spinUpCmdObj = makeCallReq("gun", "spin_up", null, null);
-		spinDownCmdObj = makeCallReq("gun", "stop", null, null);
-		fireCmdObj = makeCallReq("gun", "fire", null, null);
-		irCmdObj = makeCallReq("ir_hub", "read_cached", new String[] { "max_staleness" }, new Object[] { dataInterval / 1000.f }); // dataInterval is in ms
-		irBinaryCmdObj = makeCallReq("ir_hub", "read_binary", new String[] { "thresh" }, new Object[] { irBinaryThresh });
 		estopCmdObj = makeCallReq("driver", "move_forward_strafe", new String[] { "forward", "strafe" }, new Object[] { forwardRange.zero, strafeRange.zero });
 		exitCmdObj = makeExitReq();
 
 		// Configure view elements
 		driveJoystick.setJoystickListener(this);
-		turretJoystick.setJoystickListener(this);
 		driveJoystick.updateKnob(strafeRange.toNormalizedInput(strafe), -forwardRange.toNormalizedInput(forward)); // NOTE Y-flip
-		turretJoystick.updateKnob(yawRange.toNormalizedInput(yaw), pitchRange.toNormalizedInput(pitch));
 		updateDriveViews();
-		updateTurretViews();
 		btnPing.setBackgroundColor(unknownColor);
 		btnPing.setOnClickListener(new OnClickListener() {
 			@Override
@@ -217,26 +162,6 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 				doPing(true); // block till reply (on reply, show visual indication using button color)
 			}
 		});
-		btnLaser.setOnClickListener(new OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				laser = (btnLaser.isChecked() ? 1 : 0);
-				doLaser(false); // ok to drop (on reply, show visual indication of success/failure with toggle button state)
-			}
-		});
-		btnSpin.setOnClickListener(new OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				spin = (btnSpin.isChecked() ? 1 : 0);
-				doSpin(false); // ok to drop (on reply, show visual indication of success/failure with toggle button state)
-			}
-		});
-		btnFire.setOnClickListener(new OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				doFire(false); // ok to drop (TODO show visual indication of success/failure, e.g. with button color?)
-			}
-		});
 	}
 
 	@Override
@@ -244,13 +169,11 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		super.onResume();
 		startClient();
 		//startSubscriber(); // NOTE subscriber disabled
-		startDataThread();
 		txtConsole.setText("[SYSTEM] Ready\n");
 	}
 
 	@Override
 	protected void onPause() {
-		stopDataThread();
 		//stopSubscriber(); // NOTE subscriber disabled
 		stopClient();
 		super.onPause();
@@ -320,13 +243,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			//startActivity(serverParamsIntent);
 
 			return true;
-		
-		case R.id.action_toggle_ir:
-			irReadBinary = !irReadBinary;
-			Log.d(TAG, "onOptionsItemSelected(): IR toggled to " + (irReadBinary ? "binary" : "value") + " mode");
-			txtConsole.append("[IR] Mode = " + (irReadBinary ? "binary" : "value") + "\n");
-			break;
-		
+
 		case R.id.action_estop:
 			Log.d(TAG, "onOptionsItemSelected(): Sending E-Stop...");
 			txtConsole.append("[E-Stop]\n");
@@ -431,36 +348,6 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 			subscriberThread = null;
 		}
 	}
-	
-	private void startDataThread() {
-		stopDataThread();
-		Log.d(TAG, "startDataThread(): Starting data read thread...");
-		dataThread = new Thread() {
-			public void run() {
-				if (clientThread != null) {
-					while (true) {
-						try {
-							doIRRead(false); // don't block, may cause continuous stream of failed attempts
-							// TODO Check if a lot of continuous reads have failed, then break out
-							sleep(dataInterval);
-						} catch (InterruptedException e) {
-							Log.d(TAG, "dataThread: Interrupted! Exiting data read thread...");
-							break;
-						}
-					}
-				}
-			}
-		};
-		dataThread.start();
-	}
-	
-	private void stopDataThread() {
-		if (dataThread != null) {
-			Log.d(TAG, "stopDataThread(): Stopping data read thread...");
-			dataThread.interrupt();
-			dataThread = null;
-		}
-	}
 
 	@Override
 	public boolean onJoystickEvent(TouchJoystick joystick, int action, float x, float y) {
@@ -491,28 +378,6 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 				turn = turnRange.zero;
 				driveJoystick.updateKnob(forward, strafe); // spring back to neutral
 				doDrive(true); // NOT ok to drop
-				return true;
-			}
-		}
-		else if (joystick == turretJoystick) {
-			switch(action) {
-			case MotionEvent.ACTION_DOWN:
-				turretJoystick.updateKnob(x, y);
-				return true;
-
-			case MotionEvent.ACTION_MOVE:
-				turretJoystick.updateKnob(x, y);
-
-				// Compute control inputs
-				pitch = pitchRange.fromNormalizedInput(turretJoystick.knobYNorm);
-				yaw = yawRange.fromNormalizedInput(turretJoystick.knobXNorm);
-				//Log.d(TAG, "onJoystickEvent(): [turret/ACTION_MOVE] pitch = " + pitch + ", yaw = " + yaw);
-
-				doTurret(false); // ok to drop
-				return true;
-
-			case MotionEvent.ACTION_UP:
-				// NOP
 				return true;
 			}
 		}
@@ -594,150 +459,6 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		}
 	}
 
-	private void doTurret(final boolean block) {
-		// Generate and send turret command, if different from last
-		if ( yaw != lastYaw || pitch != lastPitch) {
-			setCallReqParam(turretCmdObj, "yaw", yaw);
-			setCallReqParam(turretCmdObj, "pitch", pitch);
-
-			sendCommand(
-				turretCmdObj,
-				block,
-				new CommandReplyCallback() {
-					@Override
-					public void onReply(final String reply) {
-						// Parse JSON reply and update if valid response (TODO and result contained in reply?)
-						if (reply != null && parseCallReply(reply) != null) {
-							// Update turret state and views
-							lastPitch = pitch;
-							lastYaw = yaw;
-							runOnUiThread(new Runnable() {
-								public void run() {
-									updateTurretViews();
-								}
-							});
-						}
-						else {
-							// Restore last turret state
-							pitch = lastPitch;
-							yaw = lastYaw;
-						}
-					}
-				}
-			);
-		}
-	}
-
-	private void doLaser(final boolean block) {
-		// Generate and send laser ON/OFF command
-		setCallReqParam(laserCmdObj, "state", laser);
-		sendCommand(
-			laserCmdObj,
-			block,
-			new CommandReplyCallback() {
-				@Override
-				public void onReply(final String reply) {
-					// Parse JSON reply and update if valid response (TODO and result contained in reply?)
-					if (reply != null && parseCallReply(reply) != null) {
-						// Update laser state
-						lastLaser = laser;
-					}
-					else {
-						runOnUiThread(new Runnable() {
-							public void run() {
-								// Restore last laser state and toggle button
-								laser = lastLaser;
-								btnLaser.setChecked(laser == 1);
-							}
-						});
-					}
-				}
-			}
-		);
-	}
-
-	private void doSpin(final boolean block) {
-		// Generate and send gun motor spin ON/OFF command
-		sendCommand(
-			(spin == 1 ? spinUpCmdObj : spinDownCmdObj),
-			block,
-			new CommandReplyCallback() {
-				@Override
-				public void onReply(final String reply) {
-					// Parse JSON reply and update if valid response (TODO and result contained in reply?)
-					if (reply != null && parseCallReply(reply) != null) {
-						// Update spin state
-						lastSpin = spin;
-					}
-					else {
-						runOnUiThread(new Runnable() {
-							public void run() {
-								// Restore last spin state and toggle button
-								spin = lastSpin;
-								btnSpin.setChecked(spin == 1);
-							}
-						});
-					}
-				}
-			}
-		);
-	}
-
-	private void doFire(final boolean block) {
-		// Generate and send fire command
-		sendCommand(fireCmdObj, block, null);
-	}
-	
-	private void doIRRead(final boolean block) {
-		// Read IR sensor data
-		sendCommand(
-			(irReadBinary ? irBinaryCmdObj : irCmdObj),
-			block,
-			new CommandReplyCallback() {
-				@Override
-				public void onReply(final String reply) {
-					// Parse JSON reply and update if valid response (TODO and result contained in reply?)
-					if (reply == null)
-						return;
-					
-					try {
-						JSONObject replyObj = parseCallReply(reply);
-						if (replyObj == null || !replyObj.has("call_return"))
-							return;
-						
-						// Extract IR data and update UI
-						JSONObject dataObj = replyObj.getJSONObject("call_return");
-						final double time = (irReadBinary ? -1.0 : dataObj.getDouble("time"));
-						final boolean fresh = (irReadBinary ? true : dataObj.getBoolean("fresh"));
-						final JSONObject readings = (irReadBinary ? dataObj : dataObj.getJSONObject("readings"));
-						//Log.d(TAG, "[IR] time: " + time + ", fresh: " + fresh + ", len(readings): " + readings.length());
-						runOnUiThread(new Runnable() {
-							public void run() {
-								// Update UI
-								if (txtConsole.length() > maxConsoleLength)
-									txtConsole.setText(""); // clear if full
-								txtConsole.append("[IR] time: " + time + ", fresh: " + fresh + ", len(readings): " + readings.length() + "\n");
-								Iterator<?> names = readings.keys();
-								while (names.hasNext()) {
-									String name = (String) names.next();
-									try {
-										JSONArray reading = readings.getJSONArray(name);
-										txtConsole.append("[IR] " + name +": " + reading.toString() + "\n");
-									} catch (JSONException e) {
-										// Something went wrong!
-									}
-								}
-								
-							}
-						});
-					} catch (JSONException e) {
-						Log.e(TAG, "Error parsing JSON IR reply: " + e);
-					}
-				}
-			}
-		);
-	}
-
 	private void doEStop(final boolean block) {
 		// Generate and send E-Stop command to stop the bot
 		sendCommand(estopCmdObj, block, null);
@@ -749,7 +470,7 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 	}
 
 	public interface CommandReplyCallback {
-		public void onReply(final String reply);
+		void onReply(final String reply);
 	}
 
 	private void sendCommand(final String cmdStr, final boolean block, final CommandReplyCallback callback) {
@@ -882,10 +603,4 @@ public class BotControl extends Activity implements TouchJoystick.JoystickListen
 		txtForward.setText(String.format("%7.2f", forward));
 		txtStrafe.setText(String.format("%7.2f", strafe));
 	}
-
-	private void updateTurretViews() {
-		txtPitch.setText(String.format("%7.2f", pitch));
-		txtYaw.setText(String.format("%7.2f", yaw));
-	}
-
 }
